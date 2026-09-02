@@ -16,7 +16,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
-    "infra:logs": "docker compose logs -f"
+    "infra:logs": "docker compose logs -f",
+    "db:migrate": "npm run prisma:migrate -w recruiter-backend",
+    "db:seed": "npm run db:seed -w recruiter-backend",
+    "db:studio": "npm run prisma:studio -w recruiter-backend"
   },
   "engines": {
     "node": ">=20.9.0"

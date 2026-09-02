@@ -1,0 +1,3 @@
+# Client do Prisma: artefato regerado, não formatar
+src/generated/
+dist/

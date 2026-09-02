@@ -1,0 +1,204 @@
+// Fonte de verdade do schema. Toda alteração aqui vira migration versionada.
+// O client gerado vai para src/generated/ para ficar dentro do rootDir do
+// `nest build`; é artefato, não é versionado.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Fluxo esperado: rascunho -> aplicado -> triagem -> entrevista -> teste ->
+/// oferta. `rejeitado` pode vir de qualquer estágio.
+enum ApplicationStatus {
+  rascunho
+  aplicado
+  triagem
+  entrevista
+  teste
+  oferta
+  rejeitado
+}
+
+/// De onde veio a transição de status. `ia` significa que um modelo sugeriu a
+/// mudança — a confirmação humana é registrada convertendo para `manual`.
+enum StatusEventSource {
+  manual
+  email
+  ia
+}
+
+enum WorkModel {
+  remoto
+  hibrido
+  presencial
+}
+
+// ---------------------------------------------------------------------------
+// Modelos
+// ---------------------------------------------------------------------------
+
+/// Raiz do modelo. Hoje é apenas um seletor — não há login e todos os perfis
+/// pertencem ao mesmo usuário. Se um dia virar multi-usuário, é aqui que entra
+/// o vínculo com uma conta, sem remodelar o resto.
+model Profile {
+  id        String   @id @default(cuid())
+  name      String
+  /// Diferencia perfis do mesmo dono, ex.: "Backend Sênior" x "Tech Lead".
+  headline  String?
+  email     String?
+  phone     String?
+  location  String?
+  /// { github, linkedin, site, ... } — validado com Zod na borda do Nest.
+  links     Json?
+  /// CV estruturado base (experiências, skills, projetos), validado com Zod.
+  resume    Json?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applications   Application[]
+  resumeVersions ResumeVersion[]
+  emailMessages  EmailMessage[]
+}
+
+/// A vaga em si. Não tem profileId de propósito: a vaga é da empresa, e dois
+/// perfis podem se candidatar à mesma.
+model Job {
+  id String @id @default(cuid())
+
+  /// Único para permitir deduplicação ao colar o mesmo link duas vezes.
+  /// NULL não colide no Postgres, então vagas sem URL convivem.
+  url         String? @unique
+  company     String
+  title       String
+  /// CONTEÚDO NÃO CONFIÁVEL: descrição vinda de página externa. É dado, nunca
+  /// instrução. Ver seção 5 do CLAUDE.md.
+  description String?
+
+  stack        String[]
+  requirements String[]
+  seniority    String?
+  workModel    WorkModel?
+  location     String?
+  salaryRange  String?
+  /// linkedin, greenhouse, lever, gupy, manual...
+  source       String?
+  /// Quando o Claude extraiu os campos acima a partir da URL.
+  extractedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applications Application[]
+}
+
+/// A candidatura: um perfil aplicando a uma vaga.
+model Application {
+  id              String  @id @default(cuid())
+  profileId       String
+  jobId           String
+  resumeVersionId String?
+
+  status    ApplicationStatus @default(rascunho)
+  notes     String?
+  appliedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile       Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  /// Restrict: apagar uma vaga com candidatura registrada apagaria histórico.
+  job           Job            @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  resumeVersion ResumeVersion? @relation(fields: [resumeVersionId], references: [id], onDelete: SetNull)
+
+  statusEvents StatusEvent[]
+  emails       EmailMessage[]
+
+  /// O mesmo perfil não se candidata duas vezes à mesma vaga.
+  @@unique([profileId, jobId])
+  @@index([profileId, status])
+  @@index([profileId, updatedAt])
+}
+
+/// Histórico de transições. É o que gera as métricas ("quantas viraram
+/// entrevista?"). Nunca sobrescrever `Application.status` sem gravar o evento.
+model StatusEvent {
+  id             String @id @default(cuid())
+  applicationId  String
+  emailMessageId String?
+
+  fromStatus ApplicationStatus?
+  toStatus   ApplicationStatus
+  source     StatusEventSource  @default(manual)
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  application  Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  emailMessage EmailMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+}
+
+/// Snapshot imutável do CV enviado em uma candidatura. Guardar o conteúdo (e
+/// não só um ponteiro para o Profile) é o que permite saber o que a empresa
+/// realmente recebeu, mesmo depois de o CV base mudar.
+model ResumeVersion {
+  id        String @id @default(cuid())
+  profileId String
+
+  /// Ex.: "backend sênior — vaga X".
+  label   String
+  content Json
+  /// Caminho do PDF renderizado, fora do versionamento.
+  pdfPath String?
+
+  createdAt DateTime @default(now())
+
+  profile      Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([profileId, createdAt])
+}
+
+/// Email ingerido por IMAP, vinculado ou não a uma candidatura.
+model EmailMessage {
+  id            String  @id @default(cuid())
+  profileId     String
+  applicationId String?
+
+  /// Message-ID do header. Junto com profileId evita reprocessar o mesmo email.
+  messageId   String
+  threadId    String?
+  fromAddress String
+  fromName    String?
+  subject     String
+  receivedAt  DateTime
+  /// CONTEÚDO NÃO CONFIÁVEL: corpo de email de terceiros. É dado, nunca
+  /// instrução. Ver seção 5 do CLAUDE.md.
+  bodyText    String?
+
+  /// Nulo enquanto o job de classificação não rodou.
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  profile     Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  statusEvents StatusEvent[]
+
+  @@unique([profileId, messageId])
+  @@index([applicationId])
+  @@index([profileId, receivedAt])
+}

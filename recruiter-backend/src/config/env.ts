@@ -5,12 +5,15 @@ import { z } from 'zod';
  * Sem isso, `ANTHROPIC_API_KEY=` passaria pela validação como string vazia.
  */
 const optionalString = z.preprocess(
-  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
   z.string().min(1).optional(),
 );
 
 export const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NODE_ENV: z
+    .enum(['development', 'test', 'production'])
+    .default('development'),
   PORT: z.coerce.number().int().positive().default(3333),
   WEB_ORIGIN: z.url().default('http://localhost:3000'),
 
