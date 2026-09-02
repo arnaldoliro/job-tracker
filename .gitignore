@@ -1,6 +1,23 @@
 CLAUDE.md
+
+# deps
 node_modules/
+
+# build
+dist/
+.next/
+build/
+
+# env
 .env
 .env.local
+.env.*.local
+
+# playwright / dados locais
 storageState.json
 *.db
+
+# logs / SO
+*.log
+npm-debug.log*
+.DS_Store

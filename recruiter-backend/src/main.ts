@@ -1,8 +1,22 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import type { Env } from './config/env';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3000);
+  const config = app.get(ConfigService<Env, true>);
+
+  app.enableCors({
+    origin: config.get('WEB_ORIGIN', { infer: true }),
+    credentials: true,
+  });
+
+  const port = config.get('PORT', { infer: true });
+  await app.listen(port);
+
+  Logger.log(`Worker ouvindo em http://localhost:${port}`, 'Bootstrap');
 }
-bootstrap();
+
+void bootstrap();

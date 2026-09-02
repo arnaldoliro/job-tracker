@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# o exemplo precisa ser versionado (o .env* acima o pegaria)
+!.env.example

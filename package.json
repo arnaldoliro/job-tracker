@@ -1,0 +1,24 @@
+{
+  "name": "job-tracker",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Personal job application tracker",
+  "workspaces": [
+    "recruiter-frontend",
+    "recruiter-backend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w recruiter-frontend",
+    "dev:worker": "npm run start:dev -w recruiter-backend",
+    "build:shared": "npm run build -w @recruit/shared",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
