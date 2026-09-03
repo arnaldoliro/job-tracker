@@ -9,6 +9,7 @@ import { ProfileCard } from "@/components/profile-card";
 import type { ProfileWithAvatar } from "@/lib/types";
 
 interface ProfileModalProps {
+  open: boolean;
   profiles: ProfileWithAvatar[];
   /** Sem perfil escolhido não há tela útil atrás — o modal não pode fechar. */
   dismissible: boolean;
@@ -19,6 +20,7 @@ interface ProfileModalProps {
 const initialState: CreateProfileState = { status: "idle" };
 
 export function ProfileModal({
+  open,
   profiles,
   dismissible,
   onSelect,
@@ -31,15 +33,22 @@ export function ProfileModal({
     initialState,
   );
 
-  // showModal() (e não o atributo `open`) é o que dá foco preso, Esc e a
-  // camada de topo do browser, sem biblioteca de modal.
+  // O <dialog> fica sempre montado e só alterna aberto/fechado. Se ele
+  // desmontasse ao fechar, o nó sairia do DOM no primeiro frame e não haveria
+  // o que animar na saída.
   useEffect(() => {
     const dialog = dialogRef.current;
 
-    if (dialog && !dialog.open) {
-      dialog.showModal();
+    if (!dialog) {
+      return;
     }
-  }, []);
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+    } else if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
 
   // Esc no modal obrigatório, em duas camadas.
   //
@@ -71,7 +80,12 @@ export function ProfileModal({
     const handleClose = () => {
       if (!dismissible && !dialog.open) {
         dialog.showModal();
+        return;
       }
+
+      // Reset aqui, e não num efeito: é callback de evento, então não gera
+      // render em cascata. Reabrir o seletor não deve trazer o form aberto.
+      setCreating(profiles.length === 0);
     };
 
     dialog.addEventListener("cancel", handleCancel);
@@ -81,7 +95,7 @@ export function ProfileModal({
       dialog.removeEventListener("cancel", handleCancel);
       dialog.removeEventListener("close", handleClose);
     };
-  }, [dismissible, onDismiss]);
+  }, [dismissible, onDismiss, profiles.length]);
 
   // Quem acabou de criar um perfil quer usar aquele.
   useEffect(() => {
@@ -93,6 +107,7 @@ export function ProfileModal({
   return (
     <dialog
       ref={dialogRef}
+      data-animated
       className="m-auto w-[min(90vw,34rem)] rounded-2xl border border-zinc-200 bg-white p-8 text-zinc-900 shadow-xl backdrop:bg-zinc-950/40 backdrop:backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
     >
       <h1 className="text-center text-xl font-semibold tracking-tight">
@@ -106,11 +121,7 @@ export function ProfileModal({
 
       <div className="mt-8 flex flex-wrap justify-center gap-2">
         {profiles.map((profile) => (
-          <ProfileCard
-            key={profile.id}
-            profile={profile}
-            onSelect={onSelect}
-          />
+          <ProfileCard key={profile.id} profile={profile} onSelect={onSelect} />
         ))}
 
         {!creating && (
@@ -131,7 +142,10 @@ export function ProfileModal({
       </div>
 
       {creating && (
-        <form action={formAction} className="mt-6 flex flex-col gap-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+        <form
+          action={formAction}
+          className="mt-6 flex flex-col gap-4 border-t border-zinc-200 pt-6 dark:border-zinc-800"
+        >
           <Field
             label="Nome"
             name="name"

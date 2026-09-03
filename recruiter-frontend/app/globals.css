@@ -24,3 +24,75 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ---------------------------------------------------------------------------
+   Modal de seleção de perfil
+   ---------------------------------------------------------------------------
+   Zoom central na entrada e na saída. `opacity` e `scale` são resolvidos no
+   compositor, sem layout nem paint.
+
+   `allow-discrete` em `display` e `overlay` é o que torna a SAÍDA possível:
+   sem ele o close() aplica display:none no primeiro frame e a transição morre
+   pela metade. O @starting-style dá ao browser o estado de onde partir na
+   entrada — sem ele não há nada para interpolar e o modal só aparece.
+
+   O backdrop anima por opacity, e não pelo valor do blur: `backdrop-filter`
+   obriga o navegador a reamostrar tudo que está atrás a cada frame, e o custo
+   escala com a área da tela.
+
+   Tudo dentro de `no-preference`: quem pediu menos movimento no sistema
+   recebe o modal instantâneo, sem transição alguma.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  dialog[data-animated] {
+    opacity: 0;
+    scale: 0.95;
+    transition:
+      opacity 160ms ease-out,
+      scale 160ms ease-out,
+      display 160ms allow-discrete,
+      overlay 160ms allow-discrete;
+  }
+
+  dialog[data-animated][open] {
+    opacity: 1;
+    scale: 1;
+  }
+
+  @starting-style {
+    dialog[data-animated][open] {
+      opacity: 0;
+      scale: 0.95;
+    }
+  }
+
+  dialog[data-animated]::backdrop {
+    opacity: 0;
+    transition:
+      opacity 160ms ease-out,
+      display 160ms allow-discrete,
+      overlay 160ms allow-discrete;
+  }
+
+  dialog[data-animated][open]::backdrop {
+    opacity: 1;
+  }
+
+  @starting-style {
+    dialog[data-animated][open]::backdrop {
+      opacity: 0;
+    }
+  }
+
+  /* A shell entra junto com a saída do modal, senão o efeito fica pela metade. */
+  [data-shell] {
+    animation: shell-in 200ms ease-out both;
+  }
+
+  @keyframes shell-in {
+    from {
+      opacity: 0;
+      scale: 0.99;
+    }
+  }
+}

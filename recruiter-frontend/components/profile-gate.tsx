@@ -44,15 +44,13 @@ export function ProfileGate({ profiles }: { profiles: ProfileWithAvatar[] }) {
         <Shell profile={selected} onSwitch={() => setSwitching(true)} />
       )}
 
-      {showModal && (
-        <ProfileModal
-          key={switching ? "switching" : "initial"}
-          profiles={profiles}
-          dismissible={Boolean(selected)}
-          onSelect={handleSelect}
-          onDismiss={() => setSwitching(false)}
-        />
-      )}
+      <ProfileModal
+        open={showModal}
+        profiles={profiles}
+        dismissible={Boolean(selected)}
+        onSelect={handleSelect}
+        onDismiss={() => setSwitching(false)}
+      />
     </>
   );
 }
@@ -73,7 +71,7 @@ interface ShellProps {
 /** Casca mínima só para provar a seleção. A lista de candidaturas vem depois. */
 function Shell({ profile, onSwitch }: ShellProps) {
   return (
-    <div className="flex flex-1 flex-col">
+    <div data-shell className="flex flex-1 flex-col">
       <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
         <div className="flex items-center gap-3">
           <span
