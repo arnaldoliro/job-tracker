@@ -1,40 +1,17 @@
-import { cookies } from "next/headers";
 import { ApplicationsPanel, listApplications } from "@/features/applications";
-import {
-  ProfileGate,
-  SELECTED_PROFILE_COOKIE,
-  listProfiles,
-} from "@/features/profile";
-import type { ProfileWithAvatar } from "@/features/profile";
-import { avatarSvg } from "@/lib/avatar";
+import { getSelectedProfile } from "@/features/profile/current-profile";
 
-export default async function Home() {
-  const [profiles, cookieStore] = await Promise.all([
-    listProfiles(),
-    cookies(),
-  ]);
+export default async function CandidaturasPage() {
+  const profile = await getSelectedProfile();
 
-  // Avatar gerado no servidor: o DiceBear não vai para o bundle do cliente.
-  const withAvatars: ProfileWithAvatar[] = profiles.map((profile) => ({
-    ...profile,
-    avatar: avatarSvg(profile.id),
-  }));
+  // Sem perfil o gate mostra o modal por cima; não há o que renderizar aqui.
+  if (!profile) {
+    return null;
+  }
 
-  // O cookie pode apontar para um perfil apagado direto no banco. Resolver
-  // contra a lista real, em vez de confiar no valor, evita a tela sem dono.
-  const storedId = cookieStore.get(SELECTED_PROFILE_COOKIE)?.value;
-  const selected = withAvatars.find((p) => p.id === storedId) ?? null;
-
-  const applications = selected ? await listApplications(selected.id) : [];
+  const applications = await listApplications(profile.id);
 
   return (
-    <ProfileGate profiles={withAvatars} selected={selected}>
-      {selected && (
-        <ApplicationsPanel
-          profileId={selected.id}
-          applications={applications}
-        />
-      )}
-    </ProfileGate>
+    <ApplicationsPanel profileId={profile.id} applications={applications} />
   );
 }

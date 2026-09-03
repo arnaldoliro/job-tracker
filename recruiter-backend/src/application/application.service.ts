@@ -91,21 +91,41 @@ export class ApplicationService {
         });
       }
 
-      // Mesma URL é a mesma vaga: colar o link duas vezes não cria duplicata.
-      const existingJob = input.url
-        ? await tx.job.findUnique({ where: { url: input.url } })
-        : null;
+      // Dois caminhos, garantidos pelo schema: ou vem `jobId` (aplicar a uma
+      // vaga salva), ou vêm empresa e cargo (registrar do zero).
+      let job: { id: string };
 
-      const job =
-        existingJob ??
-        (await tx.job.create({
-          data: {
-            company: input.company,
-            title: input.title,
-            url: input.url ?? null,
-            source: 'manual',
-          },
-        }));
+      if (input.jobId) {
+        const saved = await tx.job.findUnique({
+          where: { id: input.jobId },
+          select: { id: true },
+        });
+
+        if (!saved) {
+          throw new NotFoundException({
+            error: 'Not Found',
+            message: 'Vaga não encontrada',
+          });
+        }
+
+        job = saved;
+      } else {
+        // Mesma URL é a mesma vaga: colar o link duas vezes não cria duplicata.
+        const existingJob = input.url
+          ? await tx.job.findUnique({ where: { url: input.url } })
+          : null;
+
+        job =
+          existingJob ??
+          (await tx.job.create({
+            data: {
+              company: input.company as string,
+              title: input.title as string,
+              url: input.url ?? null,
+              source: 'manual',
+            },
+          }));
+      }
 
       // Substitui o antigo @@unique([profileId, jobId]), que o soft delete
       // tornou inviável — ver o comentário no schema.prisma.

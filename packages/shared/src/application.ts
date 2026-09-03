@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { applicationStatusSchema } from './application-status';
-import { workModelSchema } from './job';
+import { externalUrlSchema, workModelSchema } from './job';
 
 /**
  * A vaga como a candidatura a expõe. Deliberadamente menor que a tabela `Job`:
@@ -47,19 +47,50 @@ const title = z
 const notes = z.string().trim().max(2000, 'Máximo de 2000 caracteres');
 
 /**
- * Só empresa e cargo são obrigatórios. É a regra dos ~30 segundos da seção 1
- * do CLAUDE.md: se registrar uma vaga exigir sete campos, o projeto é
- * abandonado. O resto entra na edição ou pela extração automática.
+ * Dois caminhos para criar uma candidatura:
+ *
+ * - **do zero**: empresa e cargo, e nada mais obrigatório. É a regra dos ~30
+ *   segundos da seção 1 do CLAUDE.md — se registrar exigir sete campos, o
+ *   projeto é abandonado.
+ * - **a partir de uma vaga salva**: só `jobId`. Sem esse caminho, aplicar a uma
+ *   vaga salva criaria um Job NOVO, e a vaga salva nunca se reconheceria como
+ *   já aplicada.
+ *
+ * `superRefine` em vez de `z.union`: a união reporta as tentativas de cada
+ * lado, e o formulário precisa do erro no campo certo.
  */
-export const createApplicationSchema = z.strictObject({
-  profileId: z.string().min(1),
-  company,
-  title,
-  url: z.url('Link inválido').optional(),
-  status: applicationStatusSchema.optional(),
-  notes: notes.optional(),
-  appliedAt: z.iso.datetime().optional(),
-});
+export const createApplicationSchema = z
+  .strictObject({
+    profileId: z.string().min(1),
+    jobId: z.string().min(1).optional(),
+    company: company.optional(),
+    title: title.optional(),
+    url: externalUrlSchema.optional(),
+    status: applicationStatusSchema.optional(),
+    notes: notes.optional(),
+    appliedAt: z.iso.datetime().optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.jobId) {
+      return;
+    }
+
+    if (!input.company) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['company'],
+        message: 'Informe a empresa',
+      });
+    }
+
+    if (!input.title) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['title'],
+        message: 'Informe o cargo',
+      });
+    }
+  });
 
 export type CreateApplicationInput = z.infer<typeof createApplicationSchema>;
 
@@ -67,7 +98,7 @@ export type CreateApplicationInput = z.infer<typeof createApplicationSchema>;
 export const updateApplicationSchema = z.strictObject({
   company: company.optional(),
   title: title.optional(),
-  url: z.url('Link inválido').nullable().optional(),
+  url: externalUrlSchema.nullable().optional(),
   status: applicationStatusSchema.optional(),
   notes: notes.nullable().optional(),
   appliedAt: z.iso.datetime().nullable().optional(),

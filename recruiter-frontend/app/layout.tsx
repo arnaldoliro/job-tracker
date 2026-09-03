@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ProfileGate } from "@/features/profile/components/profile-gate";
+import {
+  getProfiles,
+  getSelectedProfile,
+} from "@/features/profile/current-profile";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,13 +23,31 @@ export const metadata: Metadata = {
   description: "Rastreador pessoal de candidaturas a vagas.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * O gate vive no layout, e não numa página: sem perfil escolhido, nenhuma rota
+ * tem o que mostrar. Aqui ele guarda todas — inclusive quem abre direto em
+ * /vagas/salvas com o cookie vazio.
+ */
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [profiles, selected] = await Promise.all([
+    getProfiles(),
+    getSelectedProfile(),
+  ]);
+
   return (
     <html
       lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ProfileGate profiles={profiles} selected={selected}>
+          {children}
+        </ProfileGate>
+      </body>
     </html>
   );
 }
