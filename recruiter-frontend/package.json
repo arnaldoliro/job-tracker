@@ -12,6 +12,8 @@
     "@dicebear/collection": "^9.4.2",
     "@dicebear/core": "^9.4.3",
     "@recruit/shared": "^0.0.1",
+    "csv-parse": "^7.0.2",
+    "fflate": "^0.8.3",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",

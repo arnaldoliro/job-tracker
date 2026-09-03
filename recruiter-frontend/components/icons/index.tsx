@@ -116,3 +116,12 @@ export function IconExternalLink() {
     </svg>
   );
 }
+
+export function IconUpload() {
+  return (
+    <svg {...iconProps}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M17 8 12 3 7 8M12 3v13" />
+    </svg>
+  );
+}

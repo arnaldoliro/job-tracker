@@ -1,10 +1,17 @@
 import "server-only";
 import {
   createProfileSchema,
+  profileDetailSchema,
   profileListSchema,
   profileSchema,
+  updateProfileSchema,
 } from "@recruit/shared";
-import type { CreateProfileInput, Profile } from "@recruit/shared";
+import type {
+  CreateProfileInput,
+  Profile,
+  ProfileDetail,
+  UpdateProfileInput,
+} from "@recruit/shared";
 import { env } from "@/lib/env";
 
 /**
@@ -63,6 +70,22 @@ export async function createProfile(input: CreateProfileInput): Promise<Profile>
     await request("/profiles", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  );
+}
+
+export async function getProfileDetail(id: string): Promise<ProfileDetail> {
+  return profileDetailSchema.parse(await request(`/profiles/${id}`));
+}
+
+export async function updateProfile(
+  id: string,
+  input: UpdateProfileInput,
+): Promise<ProfileDetail> {
+  return profileDetailSchema.parse(
+    await request(`/profiles/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updateProfileSchema.parse(input)),
     }),
   );
 }
