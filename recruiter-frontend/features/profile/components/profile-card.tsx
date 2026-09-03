@@ -1,4 +1,4 @@
-import type { ProfileWithAvatar } from "@/lib/types";
+import type { ProfileWithAvatar } from "@/features/profile/types";
 
 interface ProfileCardProps {
   profile: ProfileWithAvatar;

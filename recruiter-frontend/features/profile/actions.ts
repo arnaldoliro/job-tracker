@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createProfileSchema } from "@recruit/shared";
 import type { Profile } from "@recruit/shared";
-import { ApiError, createProfile } from "@/lib/api/profiles";
+import { ApiError, createProfile } from "@/features/profile/api";
 
 export type CreateProfileState =
   | { status: "idle" }

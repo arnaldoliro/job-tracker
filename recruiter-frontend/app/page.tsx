@@ -1,7 +1,6 @@
-import { ProfileGate } from "@/components/profile-gate";
-import { listProfiles } from "@/lib/api/profiles";
+import { ProfileGate, listProfiles } from "@/features/profile";
+import type { ProfileWithAvatar } from "@/features/profile";
 import { avatarSvg } from "@/lib/avatar";
-import type { ProfileWithAvatar } from "@/lib/types";
 
 export default async function Home() {
   const profiles = await listProfiles();

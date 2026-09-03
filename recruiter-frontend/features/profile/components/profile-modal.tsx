@@ -1,12 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { IconPlus } from "@/components/icons";
 import {
   createProfileAction,
   type CreateProfileState,
-} from "@/app/actions/create-profile";
-import { ProfileCard } from "@/components/profile-card";
-import type { ProfileWithAvatar } from "@/lib/types";
+} from "@/features/profile/actions";
+import { ProfileCard } from "@/features/profile/components/profile-card";
+import type { ProfileWithAvatar } from "@/features/profile/types";
 
 interface ProfileModalProps {
   open: boolean;
@@ -132,9 +133,9 @@ export function ProfileModal({
           >
             <span
               aria-hidden
-              className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-current text-2xl"
+              className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-current"
             >
-              +
+              <IconPlus size={24} />
             </span>
             <span className="text-sm font-medium">Criar perfil</span>
           </button>
