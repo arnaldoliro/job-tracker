@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   IconBriefcase,
   IconChart,
@@ -13,8 +15,8 @@ interface NavItem {
   id: string;
   label: string;
   icon: ReactNode;
-  /** Sem tela ainda. Fica visível e desabilitado, em vez de levar a lugar nenhum. */
-  ready?: boolean;
+  /** Ausente = sem tela ainda: fica visível e desabilitado. */
+  href?: string;
 }
 
 /**
@@ -23,38 +25,62 @@ interface NavItem {
  * desabilitadas para a navegação não prometer o que ainda não existe.
  */
 const items: NavItem[] = [
-  { id: "candidaturas", label: "Candidaturas", icon: <IconList />, ready: true },
-  { id: "vagas", label: "Vagas", icon: <IconBriefcase /> },
+  { id: "candidaturas", label: "Candidaturas", icon: <IconList />, href: "/" },
+  { id: "vagas", label: "Vagas", icon: <IconBriefcase />, href: "/vagas" },
   { id: "curriculo", label: "Currículo", icon: <IconDocument /> },
   { id: "emails", label: "Emails", icon: <IconMail /> },
   { id: "metricas", label: "Métricas", icon: <IconChart /> },
 ];
 
+/** "/" só casa exato; as demais casam com as subrotas (/vagas/salvas, /vagas/x). */
+function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
 export function MainNav() {
+  const pathname = usePathname();
+
   return (
     <nav aria-label="Seções">
       <ul className="flex items-center gap-1">
-        {items.map((item) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              aria-current={item.ready ? "page" : undefined}
-              disabled={!item.ready}
-              title={item.ready ? undefined : "Em breve"}
-              className={`group relative flex items-center gap-2 px-3 py-3 text-sm font-medium transition-colors duration-200 ${
-                item.ready
-                  ? "cursor-pointer text-zinc-900 dark:text-zinc-100"
-                  : "cursor-not-allowed text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-              }`}
-            >
+        {items.map((item) => {
+          const active = item.href ? isActive(pathname, item.href) : false;
+          const className = `group relative flex items-center gap-2 px-3 py-3 text-sm font-medium transition-colors duration-200 ${
+            item.href
+              ? active
+                ? "cursor-pointer text-zinc-900 dark:text-zinc-100"
+                : "cursor-pointer text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              : "cursor-not-allowed text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
+          }`;
+
+          const content = (
+            <>
               <span className="transition-transform duration-200 ease-out group-hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0">
                 {item.icon}
               </span>
               {item.label}
-              <Underline active={item.ready} muted={!item.ready} />
-            </button>
-          </li>
-        ))}
+              <Underline active={active} muted={!item.href} />
+            </>
+          );
+
+          return (
+            <li key={item.id}>
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={className}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <button type="button" disabled title="Em breve" className={className}>
+                  {content}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

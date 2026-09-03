@@ -99,3 +99,20 @@ export function IconTrash() {
     </svg>
   );
 }
+
+export function IconBookmark() {
+  return (
+    <svg {...iconProps}>
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+export function IconExternalLink() {
+  return (
+    <svg {...iconProps}>
+      <path d="M15 3h6v6M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </svg>
+  );
+}

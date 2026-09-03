@@ -43,6 +43,13 @@ enum WorkModel {
   presencial
 }
 
+enum ContractType {
+  clt
+  pj
+  estagio
+  temporario
+}
+
 // ---------------------------------------------------------------------------
 // Modelos
 // ---------------------------------------------------------------------------
@@ -69,6 +76,7 @@ model Profile {
   applications   Application[]
   resumeVersions ResumeVersion[]
   emailMessages  EmailMessage[]
+  savedJobs      SavedJob[]
 }
 
 /// A vaga em si. Não tem profileId de propósito: a vaga é da empresa, e dois
@@ -87,10 +95,20 @@ model Job {
 
   stack        String[]
   requirements String[]
+  benefits     String[]
   seniority    String?
   workModel    WorkModel?
+  contractType ContractType?
   location     String?
-  salaryRange  String?
+
+  /// Faixa salarial numérica, e não texto livre: é o que permite a tela de
+  /// métricas responder "qual a faixa das vagas que viraram entrevista?".
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String? @default("BRL")
+
+  /// Jornada semanal em horas.
+  weeklyHours Int?
   /// linkedin, greenhouse, lever, gupy, manual...
   source       String?
   /// Quando o Claude extraiu os campos acima a partir da URL.
@@ -100,6 +118,28 @@ model Job {
   updatedAt DateTime @updatedAt
 
   applications Application[]
+  savedBy      SavedJob[]
+}
+
+/// Vaga guardada por um perfil para aplicar depois.
+///
+/// É entidade própria, e não um campo em Job, porque `Job` não tem
+/// `profileId` de propósito — a vaga é da empresa. Salvar é um ato do perfil,
+/// e dois perfis podem salvar a mesma vaga sem interferir um no outro.
+///
+/// A vaga permanece salva depois de aplicada: a tela troca o botão para
+/// "acompanhar candidatura" em vez de removê-la da lista.
+model SavedJob {
+  id        String   @id @default(cuid())
+  profileId String
+  jobId     String
+  savedAt   DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, jobId])
+  @@index([profileId, savedAt])
 }
 
 /// A candidatura: um perfil aplicando a uma vaga.

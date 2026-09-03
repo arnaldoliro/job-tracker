@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useRef } from "react";
 import { APPLICATION_STATUSES } from "@recruit/shared";
 import { Field } from "@/components/field";
@@ -12,6 +13,7 @@ import type {
   Application,
   ApplicationFormState,
 } from "@/features/applications/types";
+import { safeExternalUrl } from "@/lib/safe-url";
 
 export type ModalEntry =
   | { mode: "create" }
@@ -192,6 +194,7 @@ function ViewMode({
   onClose: () => void;
 }) {
   const { job } = application;
+  const portalUrl = safeExternalUrl(job.url);
 
   return (
     <div className="flex flex-col gap-5">
@@ -205,9 +208,9 @@ function ViewMode({
 
       <dl className="flex flex-col gap-3 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-800">
         <Row label="Link">
-          {job.url ? (
+          {portalUrl ? (
             <a
-              href={job.url}
+              href={portalUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="break-all text-zinc-900 underline underline-offset-2 dark:text-zinc-100"
@@ -233,7 +236,15 @@ function ViewMode({
         </Row>
       </dl>
 
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          href={`/vagas/${job.id}`}
+          className="text-sm font-medium text-zinc-600 underline underline-offset-4 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+        >
+          Ver a vaga
+        </Link>
+
+        <div className="flex gap-2">
         <SecondaryButton onClick={onClose}>Fechar</SecondaryButton>
         <button
           type="button"
@@ -242,6 +253,7 @@ function ViewMode({
         >
           Editar
         </button>
+        </div>
       </div>
     </div>
   );
