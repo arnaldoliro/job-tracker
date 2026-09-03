@@ -113,6 +113,10 @@ model Application {
   notes     String?
   appliedAt DateTime?
 
+  /// Soft delete. Preenchido, a candidatura deixa de existir para o negócio:
+  /// some da listagem e das métricas. A linha fica só para recuperação.
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -124,10 +128,19 @@ model Application {
   statusEvents StatusEvent[]
   emails       EmailMessage[]
 
-  /// O mesmo perfil não se candidata duas vezes à mesma vaga.
-  @@unique([profileId, jobId])
+  /// NÃO recolocar `@@unique([profileId, jobId])` aqui.
+  ///
+  /// A regra continua valendo — o mesmo perfil não tem duas candidaturas
+  /// ATIVAS para a mesma vaga — mas com soft delete um unique comum quebraria
+  /// o caso de excluir e registrar de novo: a linha excluída seguiria ocupando
+  /// o par. O correto seria um índice parcial (WHERE "deletedAt" IS NULL), que
+  /// o Prisma não expressa no schema: criado por SQL cru, ele vira drift e a
+  /// migration seguinte geraria um DROP dele.
+  ///
+  /// A regra é garantida em ApplicationService.create(), dentro da transação.
   @@index([profileId, status])
   @@index([profileId, updatedAt])
+  @@index([profileId, deletedAt])
 }
 
 /// Histórico de transições. É o que gera as métricas ("quantas viraram

@@ -56,7 +56,7 @@ export function AppShell({
         <MainNav />
       </div>
 
-      <main className="flex flex-1 items-center justify-center p-6">
+      <main className="flex flex-1 flex-col p-6">
         {children}
       </main>
     </div>

@@ -4,4 +4,5 @@
  */
 export { ProfileGate } from "@/features/profile/components/profile-gate";
 export { listProfiles, createProfile, ApiError } from "@/features/profile/api";
+export { SELECTED_PROFILE_COOKIE } from "@/features/profile/selected-profile";
 export type { ProfileWithAvatar } from "@/features/profile/types";

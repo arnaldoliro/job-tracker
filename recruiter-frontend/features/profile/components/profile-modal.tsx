@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { Field } from "@/components/field";
 import { IconPlus } from "@/components/icons";
 import {
   createProfileAction,
@@ -196,30 +197,3 @@ export function ProfileModal({
   );
 }
 
-interface FieldProps {
-  label: string;
-  name: string;
-  placeholder?: string;
-  required?: boolean;
-  autoFocus?: boolean;
-  error?: string;
-}
-
-function Field({ label, name, error, ...rest }: FieldProps) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      <input
-        name={name}
-        aria-invalid={error ? true : undefined}
-        className="rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none transition focus:border-zinc-900 aria-[invalid]:border-red-500 dark:border-zinc-700 dark:focus:border-zinc-100"
-        {...rest}
-      />
-      {error && (
-        <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-          {error}
-        </span>
-      )}
-    </label>
-  );
-}

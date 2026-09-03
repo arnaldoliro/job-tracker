@@ -16,6 +16,13 @@ export class ProfileService {
     return rows.map(toProfileDto);
   }
 
+  /** Usado pelo ProfileExistsPipe para conferir id vindo do cliente. */
+  async findById(id: string): Promise<Profile | null> {
+    const row = await this.prisma.profile.findUnique({ where: { id } });
+
+    return row ? toProfileDto(row) : null;
+  }
+
   async create(input: CreateProfileInput): Promise<Profile> {
     // O primeiro perfil do banco nasce como padrão — senão o app abriria
     // sem nenhum perfil pré-selecionado.
