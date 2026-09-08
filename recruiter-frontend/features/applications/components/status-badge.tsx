@@ -6,7 +6,7 @@ import type { ApplicationStatus } from "@recruit/shared";
  * vermelho na rejeição. Ver a lista inteira e entender onde cada uma está sem
  * ler texto é o ponto.
  */
-const tone: Record<ApplicationStatus, string> = {
+export const statusTone: Record<ApplicationStatus, string> = {
   rascunho:
     "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
   aplicado:
@@ -26,7 +26,7 @@ const tone: Record<ApplicationStatus, string> = {
 export function StatusBadge({ status }: { status: ApplicationStatus }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${tone[status]}`}
+      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusTone[status]}`}
     >
       {status}
     </span>

@@ -7,7 +7,7 @@ import {
   ApplicationModal,
   type ModalEntry,
 } from "@/features/applications/components/application-modal";
-import { StatusBadge } from "@/features/applications/components/status-badge";
+import { StatusSelect } from "@/features/applications/components/status-select";
 import type { Application } from "@/features/applications/types";
 
 interface ApplicationsPanelProps {
@@ -85,7 +85,11 @@ export function ApplicationsPanel({
                 </span>
               </div>
 
-              <StatusBadge status={application.status} />
+              <StatusSelect
+                applicationId={application.id}
+                status={application.status}
+                onError={setError}
+              />
 
               <div className="flex items-center gap-1">
                 <IconButton

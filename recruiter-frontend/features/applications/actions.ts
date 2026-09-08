@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  applicationStatusSchema,
   createApplicationSchema,
   updateApplicationSchema,
 } from "@recruit/shared";
+import type { ApplicationStatus } from "@recruit/shared";
 import {
   ApiError,
   createApplication,
@@ -130,5 +132,37 @@ export async function deleteApplicationAction(id: string): Promise<DeleteState> 
     }
 
     return { status: "error", message: "Não foi possível excluir." };
+  }
+}
+
+/**
+ * Troca só o status, a partir da lista.
+ *
+ * Passa pelo mesmo `PATCH /applications/:id` do formulário, e portanto pelo
+ * único método de serviço que altera `Application.status` — o StatusEvent sai
+ * na mesma transação. Um atalho na UI não pode virar um atalho na regra.
+ */
+export async function changeStatusAction(
+  id: string,
+  status: ApplicationStatus,
+): Promise<DeleteState> {
+  const parsed = applicationStatusSchema.safeParse(status);
+
+  if (!parsed.success) {
+    return { status: "error", message: "Status inválido." };
+  }
+
+  try {
+    await updateApplication(id, { status: parsed.data });
+    revalidatePath("/");
+    revalidatePath("/vagas/salvas");
+
+    return { status: "success" };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+
+    return { status: "error", message: "Não foi possível mudar o status." };
   }
 }
