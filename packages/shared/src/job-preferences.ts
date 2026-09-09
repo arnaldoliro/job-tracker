@@ -8,17 +8,29 @@ import {
 /**
  * Preferências de vaga — o filtro que o currículo NÃO tem como adivinhar.
  *
- * A divisão importa: o currículo diz o que você sabe fazer, e isso vira
- * ORDENAÇÃO (aderência). Isto aqui diz o que você aceita, e vira CORTE. Se o
- * currículo cortasse, uma vaga em Go sumiria de quem só tem Node — e pode ser
- * exatamente a vaga que interessa.
+ * A divisão importa, e ela decide o comportamento de cada campo:
  *
- * Array vazio significa "tanto faz", nunca "nenhum". É a diferença entre um
- * filtro recém-criado e um filtro que zera a lista sem explicar por quê.
+ *   CORTAM     escopo, modalidade, contrato e senioridade. São critérios de
+ *              aceitação: se você não aceita presencial, vaga presencial é
+ *              ruído, não opção.
+ *   PRIORIZA   stack. Marcar Go empurra vaga de Go para o topo sem esconder a
+ *              de Kotlin. Cortar por stack seria pior do que parece — metade
+ *              das fontes não traz descrição, a stack detectada vem vazia, e a
+ *              vaga sumiria por falta de texto, não por não combinar.
+ *
+ * Array vazio (ou `scope` nulo) significa "tanto faz", nunca "nenhum". É a
+ * diferença entre um filtro recém-criado e um filtro que zera a lista sem
+ * explicar por quê.
  */
 
-/** Onde a vaga pode estar. `brasil` inclui remoto que aceite o Brasil. */
-export const locationScopeSchema = z.enum(['brasil', 'internacional', 'ambos']);
+/**
+ * Onde a vaga pode estar.
+ *
+ * Duas opções e mais nada, por decisão de produto: marcar uma desmarca a
+ * outra, e nenhuma marcada é tanto faz. Por isso é anulável em vez de ter um
+ * terceiro valor "ambos" — o estado neutro é a ausência de escolha.
+ */
+export const locationScopeSchema = z.enum(['brasil', 'internacional']);
 export type LocationScope = z.infer<typeof locationScopeSchema>;
 export const LOCATION_SCOPES = locationScopeSchema.options;
 
@@ -37,13 +49,84 @@ export const senioritySchema = z.enum([
 export type Seniority = z.infer<typeof senioritySchema>;
 export const SENIORITIES = senioritySchema.options;
 
+/**
+ * As tecnologias que o detector sabe reconhecer.
+ *
+ * Vive aqui, e não no backend, porque o modal de filtros precisa oferecer
+ * exatamente estas: uma caixa de "Svelte" que o detector não sabe achar seria
+ * um controle que não faz nada. As expressões que detectam cada uma ficam no
+ * backend — só os rótulos cruzam a fronteira.
+ */
+export const STACK_LABELS = [
+  'TypeScript',
+  'JavaScript',
+  'Node.js',
+  'React',
+  'Next.js',
+  'Vue',
+  'Angular',
+  'Python',
+  'Django',
+  'FastAPI',
+  'Java',
+  'Spring',
+  'Kotlin',
+  'Go',
+  'Rust',
+  'Ruby',
+  'Rails',
+  'PHP',
+  'Laravel',
+  '.NET',
+  'C++',
+  'Scala',
+  'Elixir',
+  'Clojure',
+  'Swift',
+  'Flutter',
+  'React Native',
+  'PostgreSQL',
+  'MySQL',
+  'MongoDB',
+  'Redis',
+  'Elasticsearch',
+  'DynamoDB',
+  'Cassandra',
+  'Kafka',
+  'RabbitMQ',
+  'GraphQL',
+  'gRPC',
+  'REST',
+  'Docker',
+  'Kubernetes',
+  'Terraform',
+  'AWS',
+  'GCP',
+  'Azure',
+  'Serverless',
+  'CI/CD',
+  'Microserviços',
+  'Observabilidade',
+  'Spark',
+  'Airflow',
+  'Data Warehouse',
+  'Machine Learning',
+  'IA generativa',
+] as const;
+
+export type StackLabel = (typeof STACK_LABELS)[number];
+export const stackLabelSchema = z.enum(STACK_LABELS);
+
 const keyword = z.string().trim().min(1).max(40);
 
 export const jobPreferencesSchema = z.object({
-  scope: locationScopeSchema,
+  /** `null` = tanto faz. */
+  scope: locationScopeSchema.nullable(),
   workModels: z.array(workModelSchema).max(3),
   contractTypes: z.array(contractTypeSchema).max(4),
   seniorities: z.array(senioritySchema).max(5),
+  /** Prioriza na ordenação; não elimina. */
+  stacks: z.array(stackLabelSchema).max(STACK_LABELS.length),
   /** Título precisa conter uma destas. Vazio = qualquer título. */
   titleIncludes: z.array(keyword).max(30),
   /** Título com qualquer uma destas é descartado. Vence o `titleIncludes`. */
@@ -66,10 +149,11 @@ export type JobPreferences = z.infer<typeof jobPreferencesSchema>;
  * uma lista de vagas de vendas.
  */
 export const defaultJobPreferences: JobPreferences = {
-  scope: 'ambos',
+  scope: null,
   workModels: [],
   contractTypes: [],
   seniorities: [],
+  stacks: [],
   titleIncludes: [
     'engineer',
     'engenhei',
@@ -111,6 +195,11 @@ export const discoverJobsSchema = z.strictObject({
   profileId: z.string().min(1),
   cursor: z.string().trim().max(2100).optional(),
   q: z.string().trim().max(120).optional(),
+  /**
+   * Liga as fontes lentas, que leem portal página a página em vez de receber o
+   * acervo numa resposta. Opt-in porque custa segundos.
+   */
+  expanded: z.coerce.boolean().optional(),
 });
 
 export type DiscoverJobsQuery = z.infer<typeof discoverJobsSchema>;
@@ -142,6 +231,8 @@ export const discoverResultSchema = z.object({
   exhausted: exhaustionSchema.nullable(),
   /** Fontes que falharam nesta rodada, para a tela não fingir cobertura total. */
   failedSources: z.array(z.string()),
+  /** Tempo real de rede desta rodada. 0 quando veio do cache. */
+  fetchMs: z.number().int(),
 });
 
 export type DiscoverResult = z.infer<typeof discoverResultSchema>;

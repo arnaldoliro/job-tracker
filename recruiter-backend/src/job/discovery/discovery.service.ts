@@ -3,14 +3,16 @@ import type {
   DiscoverResult,
   JobPreferences,
   JobSearchResult,
+  Seniority,
 } from '@recruit/shared';
 import { AshbySource } from './sources/ashby';
+import { BrazilPortalsSource } from './sources/br-portals';
 import { GreenhouseSource } from './sources/greenhouse';
 import { GupySource } from './sources/gupy';
 import { LeverSource } from './sources/lever';
 import { RemoteOkSource, RemotiveSource } from './sources/remote-boards';
 import { fold } from './normalize';
-import type { DiscoverySource } from './provider';
+import type { DiscoveryQuery, DiscoverySource } from './provider';
 import { scoreJob, sortKey } from './scoring';
 
 /**
@@ -22,7 +24,13 @@ import { scoreJob, sortKey } from './scoring';
  * houver varredura agendada rodando sem ninguém na tela.
  */
 
-const BATCH_SIZE = 20;
+/**
+ * Quarenta, e não vinte: a tela mostra até quatro por linha, então vinte vagas
+ * são cinco linhas — você chegaria ao fim da lista a cada dois gestos de
+ * rolagem. Fatiar mais custa zero, porque o acervo inteiro já está em memória
+ * depois da primeira busca.
+ */
+const BATCH_SIZE = 40;
 
 /** Vagas mudam em dias, não em minutos. */
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -36,6 +44,11 @@ interface CacheEntry {
   failed: string[];
 }
 
+interface Collected extends Omit<CacheEntry, 'at'> {
+  /** Tempo de rede desta chamada. Zero quando veio do cache. */
+  fetchMs: number;
+}
+
 @Injectable()
 export class DiscoveryService {
   private readonly logger = new Logger(DiscoveryService.name);
@@ -47,18 +60,23 @@ export class DiscoveryService {
     new LeverSource(),
     new RemoteOkSource(),
     new RemotiveSource(),
+    new BrazilPortalsSource(),
   ];
 
   private readonly cache = new Map<string, CacheEntry>();
 
   async discover(params: {
     q?: string;
+    expanded?: boolean;
     skills: string[];
     preferences: JobPreferences;
     excludedUrls: Set<string>;
     cursor?: string;
   }): Promise<DiscoverResult> {
-    const { items, failed } = await this.collect(params.q);
+    const { items, failed, fetchMs } = await this.collect(
+      params.q,
+      params.expanded,
+    );
 
     const eligible = items.filter((job) => matches(job, params.preferences));
 
@@ -90,6 +108,7 @@ export class DiscoveryService {
       exhausted:
         page.length > 0 ? null : eligible.length > 0 ? 'nada-novo' : 'fim',
       failedSources: failed,
+      fetchMs,
     };
   }
 
@@ -100,20 +119,20 @@ export class DiscoveryService {
    * um nome na lista de falhas, e a tela mostra que a cobertura foi parcial em
    * vez de fingir que o acervo é aquele.
    */
-  private async collect(
-    q?: string,
-  ): Promise<{ items: JobSearchResult[]; failed: string[] }> {
-    const key = fold(q ?? '');
+  private async collect(q?: string, expanded?: boolean): Promise<Collected> {
+    // A flag entra na chave: sem isso, marcar "ampliar" devolveria o resultado
+    // estreito que já estava em memória.
+    const key = `${expanded ? '+' : '-'}${fold(q ?? '')}`;
     const cached = this.cache.get(key);
 
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-      return { items: cached.items, failed: cached.failed };
+      return { items: cached.items, failed: cached.failed, fetchMs: 0 };
     }
 
     const started = Date.now();
 
     const settled = await Promise.allSettled(
-      this.sources.map((source) => withDeadline(source, q)),
+      this.sources.map((source) => withDeadline(source, { q, expanded })),
     );
 
     const items: JobSearchResult[] = [];
@@ -148,24 +167,26 @@ export class DiscoveryService {
       `Descoberta: ${items.length} vagas de ${this.sources.length - failed.length}/${this.sources.length} fontes em ${Date.now() - started}ms`,
     );
 
-    const entry: CacheEntry = { at: Date.now(), items, failed };
+    const fetchMs = Date.now() - started;
 
-    this.cache.set(key, entry);
+    this.cache.set(key, { at: Date.now(), items, failed });
 
-    return { items, failed };
+    return { items, failed, fetchMs };
   }
 }
 
 async function withDeadline(
   source: DiscoverySource,
-  q?: string,
+  query: DiscoveryQuery,
 ): Promise<JobSearchResult[]> {
+  const limit = source.deadlineMs ?? SOURCE_DEADLINE_MS;
+
   return Promise.race([
-    source.fetch({ q }),
+    source.fetch(query),
     new Promise<never>((_resolve, reject) =>
       setTimeout(
-        () => reject(new Error(`prazo de ${SOURCE_DEADLINE_MS}ms estourado`)),
-        SOURCE_DEADLINE_MS,
+        () => reject(new Error(`prazo de ${limit}ms estourado`)),
+        limit,
       ).unref(),
     ),
   ]);
@@ -208,6 +229,14 @@ function matches(job: JobSearchResult, preferences: JobPreferences): boolean {
     return false;
   }
 
+  if (
+    job.seniority !== null &&
+    preferences.seniorities.length > 0 &&
+    !preferences.seniorities.includes(job.seniority as Seniority)
+  ) {
+    return false;
+  }
+
   return withinScope(job, preferences);
 }
 
@@ -215,7 +244,9 @@ function withinScope(
   job: JobSearchResult,
   preferences: JobPreferences,
 ): boolean {
-  if (preferences.scope === 'ambos') {
+  // Nenhum lado escolhido é tanto faz: o estado neutro é a ausência de opção,
+  // não um terceiro valor.
+  if (preferences.scope === null) {
     return true;
   }
 

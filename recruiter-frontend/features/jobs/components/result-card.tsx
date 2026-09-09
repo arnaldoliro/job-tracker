@@ -59,11 +59,18 @@ export function ResultCard({
   };
 
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-      <div className="flex items-start justify-between gap-4">
+    <li className="flex h-full flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+      <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-sm font-medium">{result.company}</span>
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">
+          <span className="truncate text-sm font-medium" title={result.company}>
+            {result.company}
+          </span>
+          {/* Duas linhas no máximo: sem isto cada card da grade tem uma altura
+              diferente, porque os títulos variam de 3 a 12 palavras. */}
+          <span
+            className="line-clamp-2 text-sm text-zinc-500 dark:text-zinc-400"
+            title={result.title}
+          >
             {result.title}
           </span>
         </div>
@@ -73,7 +80,7 @@ export function ResultCard({
       </div>
 
       <JobTags job={result} />
-      <StackTags stack={result.stack} />
+      <StackTags stack={result.stack} max={4} />
 
       {salary && (
         <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
@@ -87,7 +94,9 @@ export function ResultCard({
         </p>
       )}
 
-      <div className="flex items-center gap-2">
+      {/* mt-auto: as ações encostam no rodapé, então os cards da linha
+          terminam alinhados mesmo com conteúdos de tamanhos diferentes. */}
+      <div className="mt-auto flex flex-wrap items-center gap-2">
         {portalUrl && (
           <a
             href={portalUrl}

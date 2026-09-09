@@ -117,6 +117,7 @@ export async function discoverAction(params: {
   profileId: string;
   cursor?: string;
   q?: string;
+  expanded?: boolean;
 }): Promise<DiscoverState> {
   try {
     return { status: "success", result: await discoverJobs(params) };

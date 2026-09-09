@@ -59,11 +59,15 @@ export async function discoverJobs(params: {
   profileId: string;
   cursor?: string;
   q?: string;
+  expanded?: boolean;
 }): Promise<DiscoverResult> {
   const search = new URLSearchParams({ profileId: params.profileId });
 
   if (params.cursor) search.set("cursor", params.cursor);
   if (params.q) search.set("q", params.q);
+  // Só quando ligado: z.coerce.boolean() trata "false" como verdadeiro, então
+  // o parâmetro ausente é a única forma segura de dizer "não".
+  if (params.expanded) search.set("expanded", "true");
 
   return discoverResultSchema.parse(
     await request(`/jobs/discover?${search.toString()}`),

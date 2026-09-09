@@ -31,7 +31,10 @@ export function scoreJob(
   preferences: JobPreferences,
 ): number {
   const signals: Signal[] = [
-    { weight: 5, value: stackOverlap(job.stack, skills) },
+    // Peso maior que o do currículo: stack marcada no filtro é escolha
+    // explícita e recente; skill no currículo é histórico.
+    { weight: 6, value: overlap(job.stack, preferences.stacks) },
+    { weight: 5, value: overlap(job.stack, skills) },
     { weight: 3, value: titleAffinity(job.title, skills, preferences) },
     { weight: 2, value: seniorityFit(job.seniority, preferences) },
     { weight: 2, value: workModelFit(job.workModel, preferences) },
@@ -54,7 +57,8 @@ export function scoreJob(
 }
 
 /**
- * Quantas das suas tecnologias a vaga pede.
+ * Quantas das tecnologias procuradas a vaga pede — serve tanto para o filtro
+ * quanto para as skills do currículo.
  *
  * Duas armadilhas aqui, e as duas foram medidas contra os portais reais.
  *
@@ -72,9 +76,9 @@ export function scoreJob(
 const NO_STACK_PRIOR = 0.25;
 const SATURATION = 3;
 
-function stackOverlap(stack: string[], skills: string[]): number | null {
-  // Currículo sem skills: o sinal não distingue ninguém, então sai da conta.
-  if (skills.length === 0) {
+function overlap(stack: string[], wanted: string[]): number | null {
+  // Nada com que comparar: o sinal não distingue ninguém e sai da conta.
+  if (wanted.length === 0) {
     return null;
   }
 
@@ -82,7 +86,7 @@ function stackOverlap(stack: string[], skills: string[]): number | null {
     return NO_STACK_PRIOR;
   }
 
-  const mine = new Set(skills.map(fold));
+  const mine = new Set(wanted.map(fold));
   const hits = stack.filter((item) => mine.has(fold(item))).length;
 
   return Math.min(hits, SATURATION) / SATURATION;

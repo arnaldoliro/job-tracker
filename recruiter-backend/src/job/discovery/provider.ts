@@ -17,12 +17,24 @@ export interface DiscoverySource {
   /** Vai para `JobSearchResult.source` e para a mensagem de falha na tela. */
   readonly name: string;
 
+  /**
+   * Prazo próprio, quando o padrão não serve. Fonte que faz uma requisição por
+   * vaga precisa de bem mais fôlego que uma que devolve o board inteiro.
+   */
+  readonly deadlineMs?: number;
+
   fetch(query: DiscoveryQuery): Promise<JobSearchResult[]>;
 }
 
 export interface DiscoveryQuery {
   /** Texto livre. As fontes por busca usam; as por empresa ignoram. */
   q?: string;
+
+  /**
+   * Busca ampliada: liga as fontes lentas, que leem portal página a página.
+   * Opt-in porque custa segundos, não milissegundos.
+   */
+  expanded?: boolean;
 }
 
 /**

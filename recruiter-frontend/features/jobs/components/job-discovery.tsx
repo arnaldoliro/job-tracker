@@ -1,15 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Exhaustion } from "@recruit/shared";
+import type { Exhaustion, JobPreferences } from "@recruit/shared";
 import { discoverAction } from "@/features/jobs/actions";
 import { ExtractCard } from "@/features/jobs/components/extract-card";
+import {
+  FiltersModal,
+  countMarked,
+} from "@/features/jobs/components/filters-modal";
 import { JobsTabs } from "@/features/jobs/components/jobs-tabs";
 import {
   ResultCard,
   type SearchResultItem,
 } from "@/features/jobs/components/result-card";
+import { SearchTimer, format } from "@/features/jobs/components/search-timer";
 import type { JobSearchResult } from "@/features/jobs/types";
+import { saveProfileAction } from "@/features/profile/actions";
 
 /**
  * A busca em estilo fila de partida: liga, e as vagas vão chegando.
@@ -23,16 +29,24 @@ import type { JobSearchResult } from "@/features/jobs/types";
 interface JobDiscoveryProps {
   profileId: string;
   query: string;
+  preferences: JobPreferences;
   savedUrls: string[];
   savedCount: number;
 }
 
 /** Trava contra laço infinito se o cursor parar de avançar por um defeito. */
-const MAX_BATCHES = 60;
+const MAX_BATCHES = 25;
+
+interface RunStats {
+  batches: number;
+  fetchMs: number;
+  elapsedMs: number;
+}
 
 export function JobDiscovery({
   profileId,
   query,
+  preferences,
   savedUrls,
   savedCount,
 }: JobDiscoveryProps) {
@@ -44,35 +58,80 @@ export function JobDiscovery({
   const [total, setTotal] = useState<number | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const [demand, setDemand] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [lastRun, setLastRun] = useState<RunStats | null>(null);
+
+  const [expanded, setExpanded] = useState(false);
+  const [filters, setFilters] = useState(preferences);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [savingFilters, setSavingFilters] = useState(false);
 
   // Cursor em ref, não em state: ele muda a cada lote, e como state entraria
   // nas dependências do efeito e dispararia o lote seguinte sozinho — o
   // despejo que a pausa por rolagem existe para evitar.
   const cursor = useRef<string | null>(null);
   const batches = useRef(0);
+  const fetchMs = useRef(0);
+  const began = useRef<number | null>(null);
   const runId = useRef(0);
   const sentinel = useRef<HTMLDivElement>(null);
-
   const saved = useRef(new Set(savedUrls));
 
-  // Derivado, e não um state próprio: chamar setPending dentro do efeito
-  // dispara render em cascata (react-hooks/set-state-in-effect). Um lote está
-  // em voo enquanto houver mais pedidos do que lotes concluídos.
+  // Derivado, e não um state próprio: chamar setState dentro do efeito dispara
+  // render em cascata (react-hooks/set-state-in-effect). Um lote está em voo
+  // enquanto houver mais pedidos do que lotes concluídos.
   const pending = running && demand > completed;
 
   const askForMore = useCallback(() => setDemand((value) => value + 1), []);
 
-  const toggle = () => {
-    if (running) {
-      setRunning(false);
+  /** Para e registra a corrida — o cronômetro zera, o número sobrevive. */
+  const stop = useCallback(() => {
+    setRunning(false);
+    setStartedAt(null);
 
-      return;
+    if (began.current !== null) {
+      setLastRun({
+        batches: batches.current,
+        fetchMs: fetchMs.current,
+        elapsedMs: Date.now() - began.current,
+      });
+      began.current = null;
     }
+  }, []);
 
+  const start = useCallback(() => {
     setError(null);
     setExhausted(null);
     setRunning(true);
+    began.current = Date.now();
+    setStartedAt(began.current);
+    batches.current = 0;
+    fetchMs.current = 0;
     askForMore();
+  }, [askForMore]);
+
+  /** Critério novo, ordem nova: a lista acumulada não vale mais. */
+  const applyFilters = (next: JobPreferences) => {
+    setSavingFilters(true);
+
+    void (async () => {
+      const outcome = await saveProfileAction(profileId, { preferences: next });
+
+      setSavingFilters(false);
+
+      if (outcome.status === "error") {
+        setError(outcome.message);
+
+        return;
+      }
+
+      setFilters(next);
+      setFiltersOpen(false);
+      setItems([]);
+      setTotal(null);
+      cursor.current = null;
+      start();
+    })();
   };
 
   // Busca um lote. `runId` é o que sobrevive ao efeito duplo do StrictMode em
@@ -94,6 +153,7 @@ export function JobDiscovery({
         profileId,
         cursor: cursor.current ?? undefined,
         q: query || undefined,
+        expanded,
       });
 
       if (!alive()) {
@@ -104,7 +164,7 @@ export function JobDiscovery({
 
       if (outcome.status === "error") {
         setError(outcome.message);
-        setRunning(false);
+        stop();
 
         return;
       }
@@ -112,6 +172,7 @@ export function JobDiscovery({
       const result = outcome.result;
 
       batches.current += 1;
+      fetchMs.current += result.fetchMs;
       cursor.current = result.nextCursor;
       setTotal(result.total);
       setFailed(result.failedSources);
@@ -124,14 +185,14 @@ export function JobDiscovery({
         batches.current >= MAX_BATCHES
       ) {
         setExhausted(result.exhausted ?? "fim");
-        setRunning(false);
+        stop();
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [demand, running, exhausted, profileId, query]);
+  }, [demand, running, exhausted, profileId, query, expanded, stop]);
 
   // Pede o próximo lote quando o fim da lista aparece na tela.
   useEffect(() => {
@@ -152,40 +213,94 @@ export function JobDiscovery({
     return () => observer.disconnect();
   }, [running, pending, exhausted, items.length, askForMore]);
 
+  const marked = countMarked(filters);
+
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-      <JobsTabs savedCount={savedCount} />
+    <div className="mx-auto flex w-full max-w-[110rem] flex-col gap-4">
+      {/* Cabeçalho e extração seguem estreitos: texto em linha larga é ruim de
+          ler. Só a grade de vagas aproveita a tela inteira. */}
+      <div className="max-w-4xl">
+        <JobsTabs savedCount={savedCount} />
+      </div>
 
       <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <h2 className="text-sm font-semibold">Procurar vagas</h2>
             <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-              Enquanto ligado, traz vagas de Gupy, Greenhouse, Ashby, Lever e
+              Enquanto ligada, traz vagas de Gupy, Greenhouse, Ashby, Lever e
               agregadores de remoto. Nada é gravado até você salvar.
+              {expanded && (
+                <>
+                  {" "}
+                  <span className="text-zinc-700 dark:text-zinc-300">
+                    Ampliada, inclui InfoJobs e Vagas.com — mais vagas, e uns 10
+                    segundos a mais na primeira busca.
+                  </span>
+                </>
+              )}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={toggle}
-            aria-pressed={running}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
-              running
-                ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                : "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-            }`}
-          >
-            <span
-              className={`size-2 rounded-full ${
-                running ? "animate-pulse bg-white" : "bg-white/60 dark:bg-zinc-900/60"
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              className="cursor-pointer rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            >
+              Filtros
+              {marked > 0 && (
+                <span className="ml-2 rounded-full bg-zinc-900 px-1.5 py-0.5 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">
+                  {marked}
+                </span>
+              )}
+            </button>
+
+            {/* Acervo diferente: alternar zera a lista, senão o começo viria
+                da busca estreita e o resto da ampliada. */}
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={expanded}
+                onChange={(event) => {
+                  setExpanded(event.target.checked);
+                  setItems([]);
+                  setTotal(null);
+                  setExhausted(null);
+                  cursor.current = null;
+                }}
+                className="size-4 cursor-pointer accent-zinc-900 dark:accent-zinc-100"
+              />
+              Ampliar a área de busca
+            </label>
+
+            <button
+              type="button"
+              onClick={running ? stop : start}
+              aria-pressed={running}
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
+                running
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
               }`}
-            />
-            {running ? "Procurando… parar" : "Procurar vagas"}
-          </button>
+            >
+              <span
+                className={`size-2 rounded-full ${
+                  running
+                    ? "animate-pulse bg-white"
+                    : "bg-white/60 dark:bg-zinc-900/60"
+                }`}
+              />
+              {running ? "Parar busca" : "Iniciar busca"}
+              {running && startedAt !== null && (
+                <SearchTimer key={startedAt} startedAt={startedAt} />
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* GET puro: o filtro fica na URL, é compartilhável e não precisa de JS. */}
+        {/* GET puro: o filtro de texto fica na URL, é compartilhável e não
+            precisa de JS. Os demais critérios vivem no perfil. */}
         <form action="/vagas" className="flex gap-2">
           <input
             name="q"
@@ -208,13 +323,16 @@ export function JobDiscovery({
           exhausted={exhausted}
           failed={failed}
           error={error}
+          lastRun={lastRun}
         />
       </section>
 
-      <ExtractCard profileId={profileId} />
+      <div className="max-w-4xl">
+        <ExtractCard profileId={profileId} />
+      </div>
 
       {items.length > 0 && (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {items.map((item) => (
             <ResultCard
               key={item.result.url}
@@ -227,11 +345,19 @@ export function JobDiscovery({
 
       {items.length === 0 && !running && (
         <p className="rounded-xl border border-dashed border-zinc-300 px-6 py-14 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-          Ligue a busca para começar.
+          Inicie a busca para começar.
         </p>
       )}
 
       <div ref={sentinel} aria-hidden className="h-px" />
+
+      <FiltersModal
+        open={filtersOpen}
+        preferences={filters}
+        pending={savingFilters}
+        onCancel={() => setFiltersOpen(false)}
+        onConfirm={applyFilters}
+      />
     </div>
   );
 }
@@ -243,6 +369,7 @@ function Status({
   exhausted,
   failed,
   error,
+  lastRun,
 }: {
   items: number;
   total: number | null;
@@ -250,6 +377,7 @@ function Status({
   exhausted: Exhaustion | null;
   failed: string[];
   error: string | null;
+  lastRun: RunStats | null;
 }) {
   if (error) {
     return (
@@ -281,6 +409,15 @@ function Status({
       {exhausted === "nada-novo" && (
         <span className="text-zinc-700 dark:text-zinc-300">
           Você já viu todas as vagas disponíveis. Nada novo por enquanto.
+        </span>
+      )}
+
+      {/* O cronômetro zera ao parar; o número da corrida sobrevive aqui. */}
+      {lastRun && (
+        <span>
+          Última busca: {format(lastRun.elapsedMs)} ligada · {lastRun.batches}{" "}
+          {lastRun.batches === 1 ? "lote" : "lotes"} ·{" "}
+          {(lastRun.fetchMs / 1000).toFixed(1)}s de rede
         </span>
       )}
 

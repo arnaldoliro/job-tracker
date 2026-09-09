@@ -69,6 +69,10 @@ model Profile {
   links     Json?
   /// CV estruturado base (experiências, skills, projetos), validado com Zod.
   resume    Json?
+  /// Filtro da descoberta de vagas: escopo, modalidade, contrato, senioridade
+  /// e stacks preferidas. Validado com Zod na borda, como `links` e `resume`.
+  /// Não vem em export nenhum — imune ao import do LinkedIn.
+  jobPreferences Json?
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

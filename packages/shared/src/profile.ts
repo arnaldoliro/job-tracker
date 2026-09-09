@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { defaultJobPreferences, jobPreferencesSchema } from './job-preferences';
 import { profileLinksSchema, resumeSchema } from './resume';
 
 /**
@@ -32,6 +33,9 @@ export const profileDetailSchema = profileSchema.extend({
   location: z.string().nullable(),
   links: profileLinksSchema,
   resume: resumeSchema,
+  // Com padrão: um backend sem a coluna ainda não derruba a tela de currículo
+  // por causa de um campo ausente.
+  preferences: jobPreferencesSchema.default(defaultJobPreferences),
   updatedAt: z.iso.datetime(),
 });
 
@@ -46,6 +50,7 @@ export const updateProfileSchema = z.strictObject({
   location: z.string().trim().max(160).nullable().optional(),
   links: profileLinksSchema.optional(),
   resume: resumeSchema.optional(),
+  preferences: jobPreferencesSchema.optional(),
 });
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
@@ -58,12 +63,12 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
  * metade do que o cliente mandou. Aqui isso é 400 com "Unrecognized key".
  */
 export const createProfileSchema = z.strictObject({
-  name: z.string().trim().min(1, 'Informe um nome').max(80, 'Máximo de 80 caracteres'),
-  headline: z
+  name: z
     .string()
     .trim()
-    .max(120, 'Máximo de 120 caracteres')
-    .optional(),
+    .min(1, 'Informe um nome')
+    .max(80, 'Máximo de 80 caracteres'),
+  headline: z.string().trim().max(120, 'Máximo de 120 caracteres').optional(),
 });
 
 export type CreateProfileInput = z.infer<typeof createProfileSchema>;

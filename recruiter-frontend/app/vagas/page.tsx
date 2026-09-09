@@ -1,5 +1,6 @@
 import { listSavedJobs } from "@/features/jobs";
 import { JobDiscovery } from "@/features/jobs/components/job-discovery";
+import { getProfileDetail } from "@/features/profile/api";
 import { getSelectedProfile } from "@/features/profile/current-profile";
 
 /**
@@ -8,29 +9,34 @@ import { getSelectedProfile } from "@/features/profile/current-profile";
  * refazer o fan-out nos portais, e a primeira pintura esperaria segundos por
  * uma lista que o usuário talvez nem queira.
  *
- * O que ela precisa saber é só o que já é do perfil, para o card nascer
- * mostrando "Salva" em vez de oferecer salvar de novo.
+ * O que ela precisa carregar é o que já é do perfil: o filtro salvo e as vagas
+ * salvas, para o card nascer mostrando "Salva" em vez de oferecer salvar de
+ * novo.
  */
 export default async function BuscarVagasPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const [profile, params] = await Promise.all([
+  const [selected, params] = await Promise.all([
     getSelectedProfile(),
     searchParams,
   ]);
 
-  if (!profile) {
+  if (!selected) {
     return null;
   }
 
-  const saved = await listSavedJobs(profile.id);
+  const [profile, saved] = await Promise.all([
+    getProfileDetail(selected.id),
+    listSavedJobs(selected.id),
+  ]);
 
   return (
     <JobDiscovery
-      profileId={profile.id}
+      profileId={selected.id}
       query={params.q ?? ""}
+      preferences={profile.preferences}
       savedUrls={saved
         .map((item) => item.job.url)
         .filter((url) => url !== null)}

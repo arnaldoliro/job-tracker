@@ -52,14 +52,24 @@ export function JobTags({ job }: { job: JobLike }) {
   );
 }
 
-export function StackTags({ stack }: { stack: string[] }) {
+export function StackTags({
+  stack,
+  max,
+}: {
+  stack: string[];
+  /** Corta a lista e resume o resto. Necessário no card estreito da grade. */
+  max?: number;
+}) {
   if (stack.length === 0) {
     return null;
   }
 
+  const shown = max ? stack.slice(0, max) : stack;
+  const hidden = stack.length - shown.length;
+
   return (
     <div className="flex flex-wrap gap-1.5">
-      {stack.map((item) => (
+      {shown.map((item) => (
         <span
           key={item}
           className="rounded-md border border-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
@@ -67,6 +77,11 @@ export function StackTags({ stack }: { stack: string[] }) {
           {item}
         </span>
       ))}
+      {hidden > 0 && (
+        <span className="px-1 py-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+          +{hidden}
+        </span>
+      )}
     </div>
   );
 }

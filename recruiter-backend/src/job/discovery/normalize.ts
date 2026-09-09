@@ -173,8 +173,13 @@ const STACK_VOCABULARY: [RegExp, string][] = [
   [/\brails\b/, 'Rails'],
   [/\bphp\b/, 'PHP'],
   [/\blaravel\b/, 'Laravel'],
-  [/\bc#\b|\bc-sharp\b|\bdotnet\b|\b\.net\b/, '.NET'],
-  [/\bc\+\+\b/, 'C++'],
+  // \b não serve para símbolo: entre um espaço e um "." não há fronteira de
+  // palavra, então /\b\.net\b/ e /\bc#\b/ nunca casavam. Verificado.
+  [
+    /\bdotnet\b|\bc-sharp\b|\basp\.net\b|(?:^|[^a-z0-9])\.net(?![a-z])|(?:^|[^a-z0-9])c#/,
+    '.NET',
+  ],
+  [/(?:^|[^a-z0-9])c\+\+/, 'C++'],
   [/\bscala\b/, 'Scala'],
   [/\belixir\b/, 'Elixir'],
   [/\bclojure\b/, 'Clojure'],

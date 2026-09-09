@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   defaultJobPreferences,
+  jobPreferencesSchema,
   resumeSchema,
   type DiscoverResult,
   type Job,
@@ -28,10 +29,11 @@ export class JobService {
     profileId: string;
     cursor?: string;
     q?: string;
+    expanded?: boolean;
   }): Promise<DiscoverResult> {
     const profile = await this.prisma.profile.findUnique({
       where: { id: params.profileId },
-      select: { resume: true },
+      select: { resume: true, jobPreferences: true },
     });
 
     if (!profile) {
@@ -42,12 +44,17 @@ export class JobService {
     }
 
     const resume = resumeSchema.safeParse(profile.resume);
+    const preferences = jobPreferencesSchema.safeParse(profile.jobPreferences);
 
     return this.discoveryService.discover({
       q: params.q,
+      expanded: params.expanded,
       skills: resume.success ? resume.data.skills : [],
-      // Fase 1: preferências ainda não são editáveis nem persistidas.
-      preferences: defaultJobPreferences,
+      // Preferência corrompida ou ausente cai no padrão em vez de derrubar a
+      // busca — mesmo tratamento que `links` e `resume` já recebem.
+      preferences: preferences.success
+        ? preferences.data
+        : defaultJobPreferences,
       excludedUrls: await this.resolvedUrls(params.profileId),
       cursor: params.cursor,
     });
