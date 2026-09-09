@@ -11,17 +11,21 @@ import {
 } from '@nestjs/common';
 import {
   discoverJobsSchema,
+  dismissJobSchema,
   extractJobSchema,
   saveJobSchema,
+  undismissJobSchema,
 } from '@recruit/shared';
 import type {
   DiscoverJobsQuery,
   DiscoverResult,
+  DismissJobInput,
   ExtractJobInput,
   Job,
   JobSearchResult,
   SaveJobInput,
   SavedJob,
+  UndismissJobInput,
 } from '@recruit/shared';
 import { ProfileExistsPipe } from '../common/pipes/profile-exists.pipe';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -59,6 +63,23 @@ export class JobController {
     @Body(new ZodValidationPipe(extractJobSchema)) input: ExtractJobInput,
   ): Promise<JobSearchResult> {
     return this.extractionService.extract(input.url);
+  }
+
+  /** Também antes de `:id`. Recusar não grava vaga: só a URL e o rótulo. */
+  @Post('dismissed')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  dismiss(
+    @Body(new ZodValidationPipe(dismissJobSchema)) input: DismissJobInput,
+  ): Promise<void> {
+    return this.jobService.dismiss(input);
+  }
+
+  @Delete('dismissed')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  undismiss(
+    @Body(new ZodValidationPipe(undismissJobSchema)) input: UndismissJobInput,
+  ): Promise<void> {
+    return this.jobService.undismiss(input);
   }
 
   // Antes de `:id`, senão "saved" seria capturado como id de vaga.

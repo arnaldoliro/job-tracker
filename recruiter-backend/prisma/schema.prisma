@@ -81,6 +81,32 @@ model Profile {
   resumeVersions ResumeVersion[]
   emailMessages  EmailMessage[]
   savedJobs      SavedJob[]
+  dismissedJobs  DismissedJob[]
+}
+
+/// Vaga que este perfil recusou na descoberta.
+///
+/// Guarda a URL crua, e não um jobId: vaga descartada nunca vira linha em
+/// `Job` — só salvar materializa. É por isso que a URL precisa ser canônica
+/// antes de chegar aqui, senão o mesmo anúncio com dois endereços escapa do
+/// descarte e volta na rodada seguinte.
+///
+/// Empresa, cargo e origem ficam desnormalizados de propósito: sem eles o
+/// "desfazer" morre ao recarregar a página, e numa tela de triagem rápida o
+/// clique errado é comum.
+model DismissedJob {
+  id          String   @id @default(cuid())
+  profileId   String
+  jobUrl      String
+  company     String
+  title       String
+  source      String
+  dismissedAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, jobUrl])
+  @@index([profileId, dismissedAt])
 }
 
 /// A vaga em si. Não tem profileId de propósito: a vaga é da empresa, e dois

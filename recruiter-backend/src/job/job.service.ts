@@ -1,15 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   defaultJobPreferences,
   jobPreferencesSchema,
   resumeSchema,
   type DiscoverResult,
+  type DismissJobInput,
   type Job,
   type SaveJobInput,
   type SavedJob,
+  type UndismissJobInput,
 } from '@recruit/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JobModel } from '../generated/prisma/models';
+import { canonicalJobUrl } from './discovery/canonical-url';
 import { DiscoveryService } from './discovery/discovery.service';
 
 @Injectable()
@@ -69,18 +76,69 @@ export class JobService {
    * pior erro possível numa tela que promete só mostrar o que você não viu.
    */
   private async resolvedUrls(profileId: string): Promise<Set<string>> {
-    const rows = await this.prisma.job.findMany({
-      where: {
-        url: { not: null },
-        OR: [
-          { savedBy: { some: { profileId } } },
-          { applications: { some: { profileId, deletedAt: null } } },
-        ],
-      },
-      select: { url: true },
-    });
+    const [jobs, dismissed] = await Promise.all([
+      this.prisma.job.findMany({
+        where: {
+          url: { not: null },
+          OR: [
+            { savedBy: { some: { profileId } } },
+            { applications: { some: { profileId, deletedAt: null } } },
+          ],
+        },
+        select: { url: true },
+      }),
+      this.prisma.dismissedJob.findMany({
+        where: { profileId },
+        select: { jobUrl: true },
+      }),
+    ]);
 
-    return new Set(rows.map((row) => row.url).filter((url) => url !== null));
+    return new Set([
+      ...jobs.map((row) => row.url).filter((url) => url !== null),
+      ...dismissed.map((row) => row.jobUrl),
+    ]);
+  }
+
+  /**
+   * Recusa uma vaga. Não volta mais na descoberta deste perfil.
+   *
+   * Descarte é por perfil, não global: o que não serve para "Backend Sênior"
+   * pode servir para "Tech Lead", e a vaga em si continua sem dono (§3).
+   */
+  async dismiss(input: DismissJobInput): Promise<void> {
+    const jobUrl = canonicalJobUrl(input.url);
+
+    if (!jobUrl) {
+      throw new BadRequestException({
+        error: 'Bad Request',
+        message: 'Link inválido.',
+      });
+    }
+
+    await this.prisma.dismissedJob.upsert({
+      where: { profileId_jobUrl: { profileId: input.profileId, jobUrl } },
+      create: {
+        profileId: input.profileId,
+        jobUrl,
+        company: input.company,
+        title: input.title,
+        source: input.source,
+      },
+      update: {},
+    });
+  }
+
+  /** Desfaz o descarte — o clique errado numa triagem rápida é comum. */
+  async undismiss(input: UndismissJobInput): Promise<void> {
+    const jobUrl = canonicalJobUrl(input.url);
+
+    if (!jobUrl) {
+      return;
+    }
+
+    await this.prisma.dismissedJob.deleteMany({
+      where: { profileId: input.profileId, jobUrl },
+    });
   }
 
   async findById(id: string): Promise<Job> {
@@ -114,7 +172,13 @@ export class JobService {
         });
       }
 
-      const existing = await tx.job.findUnique({ where: { url: result.url } });
+      // Canoniza aqui também, e não só na descoberta: a extração por link
+      // devolve a URL que o portal serviu, com rastreamento e sufixo de
+      // formulário. Sem isto o mesmo anúncio vira duas linhas em `Job`, e o
+      // descarte — que é chaveado por URL — deixa de pegar.
+      const url = canonicalJobUrl(result.url) ?? result.url;
+
+      const existing = await tx.job.findUnique({ where: { url } });
 
       const job =
         existing ??
@@ -122,7 +186,7 @@ export class JobService {
           data: {
             company: result.company,
             title: result.title,
-            url: result.url,
+            url,
             source: result.source,
             description: result.description,
             stack: result.stack,
@@ -138,6 +202,11 @@ export class JobService {
             weeklyHours: result.weeklyHours,
           },
         }));
+
+      // Dá para descartar na busca e salvar a mesma vaga pelo link colado.
+      // Sem apagar o descarte aqui, ela ficaria salva e recusada ao mesmo
+      // tempo, sumindo de uma tela onde deveria aparecer.
+      await tx.dismissedJob.deleteMany({ where: { profileId, jobUrl: url } });
 
       // Salvar duas vezes não duplica nem falha: o @@unique garante um por par.
       const saved = await tx.savedJob.upsert({

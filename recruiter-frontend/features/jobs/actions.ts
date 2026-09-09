@@ -6,8 +6,10 @@ import { createApplication } from "@/features/applications/api";
 import {
   ApiError,
   discoverJobs,
+  dismissJob,
   extractJob,
   saveJob,
+  undismissJob,
   unsaveJob,
 } from "@/features/jobs/api";
 import type { JobActionState } from "@/features/jobs/types";
@@ -35,6 +37,36 @@ export async function saveJobAction(
     return { status: "success" };
   } catch (error) {
     return toError(error, "Não foi possível salvar a vaga.");
+  }
+}
+
+/**
+ * Descarte e desfazer não revalidam rota nenhuma: a lista da descoberta vive
+ * no cliente, e revalidar "/vagas" refaria o fan-out nos portais a cada clique.
+ */
+export async function dismissJobAction(
+  profileId: string,
+  result: JobSearchResult,
+): Promise<JobActionState> {
+  try {
+    await dismissJob(profileId, result);
+
+    return { status: "success" };
+  } catch (error) {
+    return toError(error, "Não foi possível descartar a vaga.");
+  }
+}
+
+export async function undismissJobAction(
+  profileId: string,
+  url: string,
+): Promise<JobActionState> {
+  try {
+    await undismissJob(profileId, url);
+
+    return { status: "success" };
+  } catch (error) {
+    return toError(error, "Não foi possível desfazer.");
   }
 }
 

@@ -102,6 +102,33 @@ export async function unsaveJob(
   );
 }
 
+/** Recusa a vaga. Não grava vaga: só a URL e o rótulo, para poder desfazer. */
+export async function dismissJob(
+  profileId: string,
+  result: JobSearchResult,
+): Promise<void> {
+  await request("/jobs/dismissed", {
+    method: "POST",
+    body: JSON.stringify({
+      profileId,
+      url: result.url,
+      company: result.company,
+      title: result.title,
+      source: result.source,
+    }),
+  });
+}
+
+export async function undismissJob(
+  profileId: string,
+  url: string,
+): Promise<void> {
+  await request("/jobs/dismissed", {
+    method: "DELETE",
+    body: JSON.stringify({ profileId, url }),
+  });
+}
+
 export async function getJob(id: string): Promise<Job> {
   return jobSchema.parse(await request(`/jobs/${id}`));
 }

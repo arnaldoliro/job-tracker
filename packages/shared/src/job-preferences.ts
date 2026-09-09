@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   contractTypeSchema,
+  externalUrlSchema,
   jobSearchResultSchema,
   workModelSchema,
 } from './job';
@@ -237,9 +238,26 @@ export const discoverResultSchema = z.object({
 
 export type DiscoverResult = z.infer<typeof discoverResultSchema>;
 
+/**
+ * Descartar uma vaga da descoberta.
+ *
+ * Leva empresa, cargo e origem junto porque a vaga descartada não existe em
+ * lugar nenhum do banco — só a URL não daria para desfazer depois de recarregar
+ * a página nem para listar o que foi recusado.
+ */
 export const dismissJobSchema = z.strictObject({
   profileId: z.string().min(1),
-  url: z.string().trim().min(1).max(2048),
+  url: externalUrlSchema,
+  company: z.string().trim().min(1).max(160),
+  title: z.string().trim().min(1).max(200),
+  source: z.string().trim().min(1).max(40),
 });
 
 export type DismissJobInput = z.infer<typeof dismissJobSchema>;
+
+export const undismissJobSchema = z.strictObject({
+  profileId: z.string().min(1),
+  url: externalUrlSchema,
+});
+
+export type UndismissJobInput = z.infer<typeof undismissJobSchema>;

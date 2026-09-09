@@ -2,8 +2,12 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { IconBookmark, IconExternalLink } from "@/components/icons";
-import { saveJobAction } from "@/features/jobs/actions";
+import { IconBookmark, IconExternalLink, IconX } from "@/components/icons";
+import {
+  dismissJobAction,
+  saveJobAction,
+  undismissJobAction,
+} from "@/features/jobs/actions";
 import {
   JobTags,
   StackTags,
@@ -30,11 +34,18 @@ export interface SearchResultItem {
 export function ResultCard({
   profileId,
   item,
+  dismissible = false,
 }: {
   profileId: string;
   item: SearchResultItem;
+  /**
+   * Descartar só faz sentido na descoberta. Numa vaga que você mesmo colou o
+   * link, recusar seria recusar a própria escolha.
+   */
+  dismissible?: boolean;
 }) {
   const { result } = item;
+  const [dismissed, setDismissed] = useState(false);
   // Estado local, e não só a prop: depois de salvar, o card confirma na hora,
   // sem depender de a página inteira revalidar.
   const [saved, setSaved] = useState(item.saved);
@@ -55,8 +66,48 @@ export function ResultCard({
       }
 
       setSaved(true);
+      setDismissed(false);
     });
   };
+
+  const run = (action: () => Promise<{ status: string; message?: string }>) => {
+    setError(null);
+    startTransition(async () => {
+      const outcome = await action();
+
+      if (outcome.status === "error") {
+        setError(outcome.message ?? "Algo deu errado.");
+      }
+    });
+  };
+
+  // O card não some da grade: sumir reflui as quatro colunas inteiras a cada
+  // clique, e o desfazer teria que morar em outro lugar. Ele encolhe e fica.
+  if (dismissed) {
+    return (
+      <li className="flex h-full flex-col justify-center gap-2 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+        <span className="line-clamp-2">
+          Descartada — {result.company}: {result.title}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setDismissed(false);
+            run(() => undismissJobAction(profileId, result.url));
+          }}
+          disabled={pending}
+          className="cursor-pointer self-start text-sm font-medium underline underline-offset-4 transition hover:text-zinc-900 disabled:opacity-50 dark:hover:text-zinc-100"
+        >
+          Desfazer
+        </button>
+        {error && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+      </li>
+    );
+  }
 
   return (
     <li className="flex h-full flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
@@ -107,6 +158,22 @@ export function ResultCard({
             <IconExternalLink />
             Ver no portal
           </a>
+        )}
+
+        {dismissible && !saved && (
+          <button
+            type="button"
+            onClick={() => {
+              setDismissed(true);
+              run(() => dismissJobAction(profileId, result));
+            }}
+            disabled={pending}
+            title="Descartar — não aparece mais na busca"
+            aria-label="Descartar vaga"
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+          >
+            <IconX />
+          </button>
         )}
 
         {saved ? (

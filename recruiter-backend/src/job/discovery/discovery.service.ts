@@ -78,7 +78,9 @@ export class DiscoveryService {
       params.expanded,
     );
 
-    const eligible = items.filter((job) => matches(job, params.preferences));
+    const eligible = items
+      .filter((job) => matches(job, params.preferences))
+      .filter((job) => matchesTerm(job, params.q));
 
     const ranked = eligible
       .map((job) => ({
@@ -190,6 +192,29 @@ async function withDeadline(
       ).unref(),
     ),
   ]);
+}
+
+/**
+ * O texto digitado também FILTRA, e não só orienta as fontes.
+ *
+ * Gupy e os portais aceitam termo de busca; Greenhouse, Ashby e Lever devolvem
+ * o board inteiro e ignoram. Sem este corte, digitar "clojure" trazia 518
+ * vagas — a caixa dizia "filtrar" e não filtrava.
+ */
+function matchesTerm(job: JobSearchResult, term?: string): boolean {
+  const wanted = fold(term ?? '');
+
+  if (wanted === '') {
+    return true;
+  }
+
+  const haystack = fold(
+    [job.title, job.company, job.stack.join(' '), job.location].join(' '),
+  );
+
+  // Todas as palavras precisam aparecer: "backend go" não pode trazer toda
+  // vaga que tenha "backend" OU "go".
+  return wanted.split(' ').every((word) => haystack.includes(word));
 }
 
 /**

@@ -338,6 +338,7 @@ export function JobDiscovery({
               key={item.result.url}
               profileId={profileId}
               item={item}
+              dismissible
             />
           ))}
         </ul>
