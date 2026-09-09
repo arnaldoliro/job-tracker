@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { JobSearchResult } from "@recruit/shared";
 import { createApplication } from "@/features/applications/api";
-import { ApiError, saveJob, unsaveJob } from "@/features/jobs/api";
+import { ApiError, extractJob, saveJob, unsaveJob } from "@/features/jobs/api";
 import type { JobActionState } from "@/features/jobs/types";
 
 function toError(error: unknown, fallback: string): JobActionState {
@@ -62,5 +62,35 @@ export async function applyToJobAction(
     return { status: "success" };
   } catch (error) {
     return toError(error, "Não foi possível registrar a candidatura.");
+  }
+}
+
+export type ExtractState =
+  | { status: "idle" }
+  | { status: "error"; message: string }
+  | { status: "success"; result: JobSearchResult };
+
+/**
+ * Extrai e devolve para revisão. Como a busca, não grava nada — quem grava é o
+ * botão Salvar.
+ */
+export async function extractJobAction(
+  _prev: ExtractState,
+  formData: FormData,
+): Promise<ExtractState> {
+  const url = formData.get("url");
+
+  if (typeof url !== "string" || url.trim() === "") {
+    return { status: "error", message: "Cole o link da vaga." };
+  }
+
+  try {
+    return { status: "success", result: await extractJob(url.trim()) };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+
+    return { status: "error", message: "Não consegui extrair a vaga." };
   }
 }

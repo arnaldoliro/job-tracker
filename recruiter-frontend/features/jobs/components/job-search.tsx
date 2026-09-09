@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
-import { IconBookmark, IconExternalLink } from "@/components/icons";
-import { saveJobAction } from "@/features/jobs/actions";
+import { IconBookmark, IconExternalLink, IconUpload } from "@/components/icons";
+import {
+  extractJobAction,
+  saveJobAction,
+  type ExtractState,
+} from "@/features/jobs/actions";
 import { JobsTabs } from "@/features/jobs/components/jobs-tabs";
 import {
   JobTags,
@@ -39,6 +43,8 @@ export function JobSearch({
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         Resultados de portais. Nada aqui está no seu banco até você salvar.
       </p>
+
+      <ExtractCard profileId={profileId} />
 
       {/* GET puro: a busca fica na URL, é compartilhável e não precisa de JS. */}
       <form action="/vagas" className="flex gap-2">
@@ -78,7 +84,10 @@ function ResultCard({
   profileId: string;
   item: SearchResultItem;
 }) {
-  const { result, saved } = item;
+  const { result } = item;
+  // Estado local, e não só a prop: depois de salvar, o card confirma na hora,
+  // sem depender de a página inteira revalidar.
+  const [saved, setSaved] = useState(item.saved);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const salary = formatSalary(result);
@@ -91,7 +100,11 @@ function ResultCard({
 
       if (outcome.status === "error") {
         setError(outcome.message);
+
+        return;
       }
+
+      setSaved(true);
     });
   };
 
@@ -158,5 +171,67 @@ function ResultCard({
         )}
       </div>
     </li>
+  );
+}
+
+const idle: ExtractState = { status: "idle" };
+
+/**
+ * Cola o link, o Claude preenche. O resultado aparece como um card idêntico ao
+ * da busca — é o mesmo formato, então segue pelo mesmo caminho de salvar e
+ * preserva stack, salário e requisitos, que o formulário de candidatura não
+ * carregaria.
+ */
+function ExtractCard({ profileId }: { profileId: string }) {
+  const [state, formAction, pending] = useActionState(extractJobAction, idle);
+
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-sm font-semibold">Extrair de um link</h2>
+        <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+          Cole o endereço da vaga e o Claude preenche empresa, cargo, stack,
+          salário e requisitos. Nada é gravado até você salvar.
+        </p>
+      </div>
+
+      <form action={formAction} className="flex flex-wrap gap-2">
+        <input
+          name="url"
+          type="url"
+          required
+          placeholder="https://…"
+          className="min-w-64 flex-1 rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none transition focus:border-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-100"
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        >
+          <IconUpload />
+          {pending ? "Lendo a página…" : "Extrair"}
+        </button>
+      </form>
+
+      {state.status === "error" && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {state.message}
+        </p>
+      )}
+
+      {state.status === "success" && (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-emerald-700 dark:text-emerald-400">
+            Extraído. Confira antes de salvar.
+          </p>
+          <ul>
+            <ResultCard
+              profileId={profileId}
+              item={{ result: state.result, saved: false }}
+            />
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
