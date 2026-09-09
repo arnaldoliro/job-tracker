@@ -1,24 +1,79 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type {
-  Job,
-  JobSearchResult,
-  SaveJobInput,
-  SavedJob,
+import {
+  defaultJobPreferences,
+  resumeSchema,
+  type DiscoverResult,
+  type Job,
+  type SaveJobInput,
+  type SavedJob,
 } from '@recruit/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JobModel } from '../generated/prisma/models';
-import { JobSearchProvider, type JobSearchQuery } from './job-search.provider';
+import { DiscoveryService } from './discovery/discovery.service';
 
 @Injectable()
 export class JobService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly searchProvider: JobSearchProvider,
+    private readonly discoveryService: DiscoveryService,
   ) {}
 
-  /** Não toca o banco: resultado de busca só vira `Job` quando salvo. */
-  search(query: JobSearchQuery): Promise<JobSearchResult[]> {
-    return this.searchProvider.search(query);
+  /**
+   * Descoberta: vagas reais dos portais, ordenadas por aderência ao currículo.
+   *
+   * Como a busca, não toca o banco para escrever — só lê o que já é seu, para
+   * não reoferecer o que você já resolveu.
+   */
+  async discover(params: {
+    profileId: string;
+    cursor?: string;
+    q?: string;
+  }): Promise<DiscoverResult> {
+    const profile = await this.prisma.profile.findUnique({
+      where: { id: params.profileId },
+      select: { resume: true },
+    });
+
+    if (!profile) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Perfil não encontrado',
+      });
+    }
+
+    const resume = resumeSchema.safeParse(profile.resume);
+
+    return this.discoveryService.discover({
+      q: params.q,
+      skills: resume.success ? resume.data.skills : [],
+      // Fase 1: preferências ainda não são editáveis nem persistidas.
+      preferences: defaultJobPreferences,
+      excludedUrls: await this.resolvedUrls(params.profileId),
+      cursor: params.cursor,
+    });
+  }
+
+  /**
+   * URLs que este perfil já resolveu, e que não devem voltar na fila.
+   *
+   * Salvas NÃO bastam: `unsave` apaga só o `SavedJob`, e a `Application`
+   * sobrevive (`onDelete: Restrict`). Sem o segundo braço, uma vaga em que
+   * você já se candidatou e depois tirou das salvas volta como novidade — o
+   * pior erro possível numa tela que promete só mostrar o que você não viu.
+   */
+  private async resolvedUrls(profileId: string): Promise<Set<string>> {
+    const rows = await this.prisma.job.findMany({
+      where: {
+        url: { not: null },
+        OR: [
+          { savedBy: { some: { profileId } } },
+          { applications: { some: { profileId, deletedAt: null } } },
+        ],
+      },
+      select: { url: true },
+    });
+
+    return new Set(rows.map((row) => row.url).filter((url) => url !== null));
   }
 
   async findById(id: string): Promise<Job> {

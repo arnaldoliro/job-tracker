@@ -9,8 +9,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { extractJobSchema, saveJobSchema } from '@recruit/shared';
+import {
+  discoverJobsSchema,
+  extractJobSchema,
+  saveJobSchema,
+} from '@recruit/shared';
 import type {
+  DiscoverJobsQuery,
+  DiscoverResult,
   ExtractJobInput,
   Job,
   JobSearchResult,
@@ -29,12 +35,19 @@ export class JobController {
     private readonly extractionService: JobExtractionService,
   ) {}
 
-  @Get('search')
-  search(
-    @Query('q') q?: string,
-    @Query('source') source?: string,
-  ): Promise<JobSearchResult[]> {
-    return this.jobService.search({ q, source });
+  /**
+   * Descoberta em lotes. Antes de `:id`, senão "discover" vira id de vaga.
+   *
+   * Dois pipes, e os dois são necessários: o Zod valida a forma da query, e o
+   * ProfileExistsPipe confere o `profileId` contra o banco — ele chega do
+   * cliente, e o §5 diz para tratá-lo como suspeito.
+   */
+  @Get('discover')
+  discover(
+    @Query(new ZodValidationPipe(discoverJobsSchema)) query: DiscoverJobsQuery,
+    @Query('profileId', ProfileExistsPipe) profileId: string,
+  ): Promise<DiscoverResult> {
+    return this.jobService.discover({ ...query, profileId });
   }
 
   /**

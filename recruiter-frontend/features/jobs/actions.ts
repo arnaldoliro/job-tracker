@@ -1,9 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { JobSearchResult } from "@recruit/shared";
+import type { DiscoverResult, JobSearchResult } from "@recruit/shared";
 import { createApplication } from "@/features/applications/api";
-import { ApiError, extractJob, saveJob, unsaveJob } from "@/features/jobs/api";
+import {
+  ApiError,
+  discoverJobs,
+  extractJob,
+  saveJob,
+  unsaveJob,
+} from "@/features/jobs/api";
 import type { JobActionState } from "@/features/jobs/types";
 
 function toError(error: unknown, fallback: string): JobActionState {
@@ -20,7 +26,10 @@ export async function saveJobAction(
 ): Promise<JobActionState> {
   try {
     await saveJob(profileId, result);
-    revalidatePath("/vagas");
+    // Sem revalidar "/vagas": a descoberta acumula lotes no cliente, e
+    // revalidar aquela rota refaz o fan-out nos portais a cada vaga salva —
+    // segundos de espera por clique, para reconstruir uma lista que o próprio
+    // card já atualizou localmente.
     revalidatePath("/vagas/salvas");
 
     return { status: "success" };
@@ -56,7 +65,6 @@ export async function applyToJobAction(
   try {
     await createApplication({ profileId, jobId });
     revalidatePath("/");
-    revalidatePath("/vagas");
     revalidatePath("/vagas/salvas");
 
     return { status: "success" };
@@ -92,5 +100,34 @@ export async function extractJobAction(
     }
 
     return { status: "error", message: "Não consegui extrair a vaga." };
+  }
+}
+
+export type DiscoverState =
+  | { status: "error"; message: string }
+  | { status: "success"; result: DiscoverResult };
+
+/**
+ * Um lote da descoberta.
+ *
+ * É Server Action e não fetch do navegador porque `API_URL` é do servidor: o
+ * cliente nunca fala com a porta 3333 direto.
+ */
+export async function discoverAction(params: {
+  profileId: string;
+  cursor?: string;
+  q?: string;
+}): Promise<DiscoverState> {
+  try {
+    return { status: "success", result: await discoverJobs(params) };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+
+    return {
+      status: "error",
+      message: "Não consegui buscar vagas nos portais agora.",
+    };
   }
 }

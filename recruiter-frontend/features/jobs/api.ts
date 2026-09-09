@@ -1,12 +1,17 @@
 import "server-only";
 import {
+  discoverResultSchema,
   jobSchema,
-  jobSearchResultListSchema,
   jobSearchResultSchema,
   savedJobListSchema,
   savedJobSchema,
 } from "@recruit/shared";
-import type { Job, JobSearchResult, SavedJob } from "@recruit/shared";
+import type {
+  DiscoverResult,
+  Job,
+  JobSearchResult,
+  SavedJob,
+} from "@recruit/shared";
 import { env } from "@/lib/env";
 
 export class ApiError extends Error {
@@ -49,17 +54,19 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   return body;
 }
 
-export async function searchJobs(params: {
+/** Um lote da descoberta. O cursor é opaco: vem do lote anterior, sem ser lido. */
+export async function discoverJobs(params: {
+  profileId: string;
+  cursor?: string;
   q?: string;
-  source?: string;
-}): Promise<JobSearchResult[]> {
-  const search = new URLSearchParams();
+}): Promise<DiscoverResult> {
+  const search = new URLSearchParams({ profileId: params.profileId });
 
+  if (params.cursor) search.set("cursor", params.cursor);
   if (params.q) search.set("q", params.q);
-  if (params.source) search.set("source", params.source);
 
-  return jobSearchResultListSchema.parse(
-    await request(`/jobs/search?${search.toString()}`),
+  return discoverResultSchema.parse(
+    await request(`/jobs/discover?${search.toString()}`),
   );
 }
 
