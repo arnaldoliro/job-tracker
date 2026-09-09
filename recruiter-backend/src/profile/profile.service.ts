@@ -1,12 +1,15 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
+  defaultJobPreferences,
   emptyLinks,
   emptyResume,
+  jobPreferencesSchema,
   profileLinksSchema,
   resumeSchema,
 } from '@recruit/shared';
 import type {
   CreateProfileInput,
+  JobPreferences,
   Profile,
   ProfileDetail,
   ProfileLinks,
@@ -70,6 +73,13 @@ export class ProfileService {
         'resume',
         row.id,
       ),
+      preferences: this.parseJson<JobPreferences>(
+        row.jobPreferences,
+        jobPreferencesSchema,
+        defaultJobPreferences,
+        'jobPreferences',
+        row.id,
+      ),
       updatedAt: row.updatedAt.toISOString(),
     };
   }
@@ -126,6 +136,9 @@ export class ProfileService {
         ...(input.location !== undefined && { location: input.location }),
         ...(input.links !== undefined && { links: input.links }),
         ...(input.resume !== undefined && { resume: input.resume }),
+        ...(input.preferences !== undefined && {
+          jobPreferences: input.preferences,
+        }),
       },
     });
 

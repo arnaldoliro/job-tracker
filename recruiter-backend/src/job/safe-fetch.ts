@@ -28,6 +28,16 @@ const MAX_REDIRECTS = 5;
 const MAX_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 12_000;
 
+/**
+ * Board de vaga é bem maior que página de vaga — a descrição de cada vaga vem
+ * embutida. Medido: Nubank 1,75 MB, Ramp 2,34 MB, OpenAI 12,9 MB.
+ *
+ * O teto fica em 3 MB e a OpenAI fica de fora da watchlist. Subir o limite para
+ * caber no maior board é o caminho errado: são 12 MB de JSON parseados de uma
+ * vez no event loop, para uma empresa só.
+ */
+const MAX_JSON_BYTES = 4 * 1024 * 1024;
+
 const ALLOWED_CONTENT = ['text/html', 'application/xhtml+xml', 'text/plain'];
 
 export class FetchError extends Error {}
@@ -236,6 +246,53 @@ export interface FetchedPage {
 }
 
 export async function fetchPublicPage(rawUrl: string): Promise<FetchedPage> {
+  const { finalUrl, body } = await fetchCapped(rawUrl, {
+    accept: 'text/html,application/xhtml+xml',
+    allowedContent: ALLOWED_CONTENT,
+    maxBytes: MAX_BYTES,
+    wrongTypeMessage: 'O link não aponta para uma página HTML.',
+  });
+
+  return { finalUrl, html: body };
+}
+
+/**
+ * Mesma busca, para endpoints que devolvem JSON.
+ *
+ * Aqui a URL não vem do usuário — os hosts dos portais são constantes do
+ * código —, então a defesa de SSRF não é o ponto. O que se reaproveita é o
+ * teto de tamanho, o timeout e a revalidação a cada redirecionamento: um board
+ * grande sem limite enche a memória do processo.
+ *
+ * Devolve `unknown` de propósito. Quem chama valida com Zod: JSON de terceiro
+ * é dado externo, mesmo vindo de host conhecido (seção 5 do CLAUDE.md).
+ */
+export async function fetchPublicJson(rawUrl: string): Promise<unknown> {
+  const { body } = await fetchCapped(rawUrl, {
+    accept: 'application/json',
+    allowedContent: ['application/json'],
+    maxBytes: MAX_JSON_BYTES,
+    wrongTypeMessage: 'A resposta não é JSON.',
+  });
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new FetchError('A resposta não é um JSON válido.');
+  }
+}
+
+interface FetchOptions {
+  accept: string;
+  allowedContent: string[];
+  maxBytes: number;
+  wrongTypeMessage: string;
+}
+
+async function fetchCapped(
+  rawUrl: string,
+  options: FetchOptions,
+): Promise<{ finalUrl: string; body: string }> {
   let current: URL;
 
   try {
@@ -257,8 +314,10 @@ export async function fetchPublicPage(rawUrl: string): Promise<FetchedPage> {
         signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: {
           // Sem cookies, sem credenciais, sem cabeçalho de origem.
-          'User-Agent': 'job-tracker/1.0 (+extração de vaga)',
-          Accept: 'text/html,application/xhtml+xml',
+          // ASCII puro: caractere acentuado aqui leva 403 de WAF — a Ashby
+          // recusa a mesma requisição só por causa do cabeçalho. Medido.
+          'User-Agent': 'job-tracker/1.0 (+personal job tracker)',
+          Accept: options.accept,
           'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
         },
       });
@@ -287,11 +346,14 @@ export async function fetchPublicPage(rawUrl: string): Promise<FetchedPage> {
 
     const contentType = response.headers.get('content-type') ?? '';
 
-    if (!ALLOWED_CONTENT.some((type) => contentType.includes(type))) {
-      throw new FetchError('O link não aponta para uma página HTML.');
+    if (!options.allowedContent.some((type) => contentType.includes(type))) {
+      throw new FetchError(options.wrongTypeMessage);
     }
 
-    return { finalUrl: current.toString(), html: await readCapped(response) };
+    return {
+      finalUrl: current.toString(),
+      body: await readCapped(response, options.maxBytes),
+    };
   }
 
   throw new FetchError('Redirecionamentos demais.');
@@ -304,7 +366,10 @@ export async function fetchPublicPage(rawUrl: string): Promise<FetchedPage> {
  * descomprime gzip de forma transparente — poucos KB na rede podem virar
  * gigabytes em memória. O corte tem que acontecer a cada pedaço.
  */
-async function readCapped(response: Response): Promise<string> {
+async function readCapped(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
   if (!response.body) {
     return '';
   }
@@ -323,8 +388,8 @@ async function readCapped(response: Response): Promise<string> {
 
       total += value.byteLength;
 
-      if (total > MAX_BYTES) {
-        throw new FetchError('A página é grande demais.');
+      if (total > maxBytes) {
+        throw new FetchError('A resposta é grande demais.');
       }
 
       chunks.push(value);

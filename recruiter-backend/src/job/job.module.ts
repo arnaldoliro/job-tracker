@@ -1,10 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ProfileModule } from '../profile/profile.module';
+import { DiscoveryService } from './discovery/discovery.service';
 import { JobController } from './job.controller';
-import {
-  FixtureJobSearchProvider,
-  JobSearchProvider,
-} from './job-search.provider';
 import { JobExtractionService } from './job-extraction.service';
 import { JobService } from './job.service';
 
@@ -12,11 +9,6 @@ import { JobService } from './job.service';
   // ProfileModule pelo ProfileExistsPipe, que injeta o ProfileService.
   imports: [ProfileModule],
   controllers: [JobController],
-  providers: [
-    JobService,
-    JobExtractionService,
-    // Trocar a busca fictícia pela real é trocar esta linha.
-    { provide: JobSearchProvider, useClass: FixtureJobSearchProvider },
-  ],
+  providers: [JobService, JobExtractionService, DiscoveryService],
 })
 export class JobModule {}
