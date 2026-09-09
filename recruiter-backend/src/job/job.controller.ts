@@ -9,8 +9,9 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { saveJobSchema } from '@recruit/shared';
+import { extractJobSchema, saveJobSchema } from '@recruit/shared';
 import type {
+  ExtractJobInput,
   Job,
   JobSearchResult,
   SaveJobInput,
@@ -18,11 +19,15 @@ import type {
 } from '@recruit/shared';
 import { ProfileExistsPipe } from '../common/pipes/profile-exists.pipe';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { JobExtractionService } from './job-extraction.service';
 import { JobService } from './job.service';
 
 @Controller('jobs')
 export class JobController {
-  constructor(private readonly jobService: JobService) {}
+  constructor(
+    private readonly jobService: JobService,
+    private readonly extractionService: JobExtractionService,
+  ) {}
 
   @Get('search')
   search(
@@ -30,6 +35,17 @@ export class JobController {
     @Query('source') source?: string,
   ): Promise<JobSearchResult[]> {
     return this.jobService.search({ q, source });
+  }
+
+  /**
+   * Extrai uma vaga a partir da URL. Não persiste nada: devolve o mesmo
+   * formato de um resultado de busca, para revisão antes de salvar.
+   */
+  @Post('extract')
+  extract(
+    @Body(new ZodValidationPipe(extractJobSchema)) input: ExtractJobInput,
+  ): Promise<JobSearchResult> {
+    return this.extractionService.extract(input.url);
   }
 
   // Antes de `:id`, senão "saved" seria capturado como id de vaga.

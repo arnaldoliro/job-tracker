@@ -5,6 +5,7 @@ import {
   FixtureJobSearchProvider,
   JobSearchProvider,
 } from './job-search.provider';
+import { JobExtractionService } from './job-extraction.service';
 import { JobService } from './job.service';
 
 @Module({
@@ -13,6 +14,7 @@ import { JobService } from './job.service';
   controllers: [JobController],
   providers: [
     JobService,
+    JobExtractionService,
     // Trocar a busca fictícia pela real é trocar esta linha.
     { provide: JobSearchProvider, useClass: FixtureJobSearchProvider },
   ],

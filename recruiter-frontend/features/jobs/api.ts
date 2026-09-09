@@ -2,6 +2,7 @@ import "server-only";
 import {
   jobSchema,
   jobSearchResultListSchema,
+  jobSearchResultSchema,
   savedJobListSchema,
   savedJobSchema,
 } from "@recruit/shared";
@@ -92,4 +93,17 @@ export async function unsaveJob(
 
 export async function getJob(id: string): Promise<Job> {
   return jobSchema.parse(await request(`/jobs/${id}`));
+}
+
+/**
+ * Extrai uma vaga a partir da URL. Não persiste: devolve o mesmo formato de um
+ * resultado de busca, que só vira `Job` quando salvo.
+ */
+export async function extractJob(url: string): Promise<JobSearchResult> {
+  return jobSearchResultSchema.parse(
+    await request("/jobs/extract", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
+  );
 }
