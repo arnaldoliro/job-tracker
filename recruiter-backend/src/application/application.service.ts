@@ -236,18 +236,31 @@ export class ApplicationService {
   }
 
   /** Soft delete: a linha fica, o negócio deixa de enxergá-la. */
+  /**
+   * Soft delete não dispara `ON DELETE SET NULL`, então o email ligado a esta
+   * candidatura precisa ser solto à mão. Sem isso ele aponta para uma linha
+   * invisível e some das duas telas: não aparece na candidatura, porque ela
+   * foi excluída, nem na caixa de não vinculados, porque ainda tem vínculo.
+   */
   async softDelete(id: string): Promise<void> {
-    const { count } = await this.prisma.application.updateMany({
-      where: { id, ...active },
-      data: { deletedAt: new Date() },
-    });
-
-    if (count === 0) {
-      throw new NotFoundException({
-        error: 'Not Found',
-        message: 'Candidatura não encontrada',
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.application.updateMany({
+        where: { id, ...active },
+        data: { deletedAt: new Date() },
       });
-    }
+
+      if (count === 0) {
+        throw new NotFoundException({
+          error: 'Not Found',
+          message: 'Candidatura não encontrada',
+        });
+      }
+
+      await tx.emailMessage.updateMany({
+        where: { applicationId: id },
+        data: { applicationId: null },
+      });
+    });
   }
 }
 

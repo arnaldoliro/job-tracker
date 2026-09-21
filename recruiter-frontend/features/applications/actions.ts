@@ -6,10 +6,11 @@ import {
   createApplicationSchema,
   updateApplicationSchema,
 } from "@recruit/shared";
-import type { ApplicationStatus } from "@recruit/shared";
+import type { ApplicationStatus, TimelineEntry } from "@recruit/shared";
 import {
   ApiError,
   createApplication,
+  getTimeline,
   deleteApplication,
   updateApplication,
 } from "@/features/applications/api";
@@ -164,5 +165,26 @@ export async function changeStatusAction(
     }
 
     return { status: "error", message: "Não foi possível mudar o status." };
+  }
+}
+
+export type TimelineState =
+  | { status: "error"; message: string }
+  | { status: "success"; entries: TimelineEntry[] };
+
+/**
+ * Carregada ao abrir o modal, e não junto com a lista: o histórico só interessa
+ * de uma candidatura por vez, e buscá-lo para todas na página inicial custaria
+ * uma consulta por linha para dado que quase nunca é aberto.
+ */
+export async function loadTimelineAction(id: string): Promise<TimelineState> {
+  try {
+    return { status: "success", entries: await getTimeline(id) };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+
+    return { status: "error", message: "Não consegui carregar o histórico." };
   }
 }

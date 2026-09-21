@@ -9,6 +9,7 @@ import {
   updateApplicationAction,
 } from "@/features/applications/actions";
 import { StatusBadge } from "@/features/applications/components/status-badge";
+import { ApplicationTimeline } from "@/features/applications/components/application-timeline";
 import type {
   Application,
   ApplicationFormState,
@@ -235,6 +236,8 @@ function ViewMode({
           )}
         </Row>
       </dl>
+
+      <ApplicationTimeline key={application.id} applicationId={application.id} />
 
       <div className="flex items-center justify-between gap-2">
         <Link
