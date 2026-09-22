@@ -135,6 +135,54 @@ describe('LinkedInAlertsSource', () => {
     }
   });
 
+  it('republicação vira uma vaga só, ficando a mais nova', async () => {
+    // Medido no lote real: a mesma vaga relistada ganha id novo, e três
+    // cards idênticos apareciam lado a lado.
+    const vagas = await fonte([
+      {
+        fromAddress: ALERTA,
+        receivedAt: new Date('2026-09-09T10:00:00Z'),
+        bodyText: corpo([
+          'Backend Júnior — Go',
+          'Jungle Gaming',
+          'Brasil',
+          '3001',
+        ]),
+      },
+      {
+        fromAddress: ALERTA,
+        receivedAt: new Date('2026-09-18T10:00:00Z'),
+        bodyText: corpo([
+          'Backend Júnior — Go',
+          'Jungle Gaming',
+          'Brasil',
+          '3002',
+        ]),
+      },
+    ]).fetch();
+
+    expect(vagas).toHaveLength(1);
+    // A mais nova: republicar sugere que a anterior expirou.
+    expect(vagas[0].url).toBe('https://www.linkedin.com/jobs/view/3002');
+    expect(vagas[0].postedAt).toBe('2026-09-18T10:00:00.000Z');
+  });
+
+  it('mesma vaga em cidades diferentes continua sendo duas', async () => {
+    // O local faz parte da chave justamente para isto.
+    const vagas = await fonte([
+      {
+        fromAddress: ALERTA,
+        receivedAt: new Date('2026-09-10T10:00:00Z'),
+        bodyText: corpo(
+          ['Desenvolvedor Júnior', 'Jobbol', 'Salvador, BA', '3003'],
+          ['Desenvolvedor Júnior', 'Jobbol', 'São Paulo, SP', '3004'],
+        ),
+      },
+    ]).fetch();
+
+    expect(vagas).toHaveLength(2);
+  });
+
   it('a stack vem do título, nunca da empresa', async () => {
     // Uma empresa chamada "Node Solutions" injetaria uma tag que depois
     // dirige a pontuação e a busca por texto.

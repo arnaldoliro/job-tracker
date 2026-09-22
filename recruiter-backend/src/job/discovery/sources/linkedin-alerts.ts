@@ -4,6 +4,7 @@ import { JOB_DIGEST_SENDERS } from '../../../email/ats';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { parseLinkedInAlert, type AlertJob } from '../linkedin-alert';
 import {
+  fold,
   seniorityFromTitle,
   stackFromText,
   workModelFromText,
@@ -100,8 +101,8 @@ export class LinkedInAlertsSource implements DiscoverySource {
       }
     }
 
-    const items = [...firstSeen.values()].map(({ job, at }) =>
-      toResult(job, at),
+    const items = dropReposts(
+      [...firstSeen.values()].map(({ job, at }) => toResult(job, at)),
     );
 
     this.report({
@@ -214,6 +215,47 @@ function toResult(job: AlertJob, firstSeen: Date): JobSearchResult {
     // primeiro digest que a citou é o mais velho que sabemos dela.
     postedAt: firstSeen.toISOString(),
   };
+}
+
+/**
+ * Republicação: a MESMA vaga relistada ganha id novo no LinkedIn.
+ *
+ * Medido no lote real — "Jungle Gaming / Backend Developer Júnior — Go —
+ * Remoto" apareceu três vezes, com ids diferentes e datas de 9, 16 e 18 de
+ * setembro. Eram 3 grupos repetidos em 22 vagas, e o usuário vê cards
+ * idênticos lado a lado.
+ *
+ * A chave é EXATA nos três campos, não difusa: empresa, cargo e local
+ * idênticos. Duas aberturas genuínas com o mesmo cargo na mesma empresa E na
+ * mesma cidade são muito mais raras que uma republicação — e o local no meio
+ * da chave preserva "Desenvolvedor Júnior na Jobbol" em Salvador e em São
+ * Paulo como vagas distintas, que é o certo.
+ *
+ * Fica a mais NOVA: republicar sugere que a anterior expirou ou foi fechada,
+ * então o anúncio recente é o que ainda aceita candidatura.
+ *
+ * Só dentro desta fonte. Entre fontes diferentes isto seria perigoso — os
+ * campos vêm de formatos distintos e fundir duas vagas reais é pior que
+ * mostrar duas.
+ */
+function dropReposts(items: JobSearchResult[]): JobSearchResult[] {
+  const best = new Map<string, JobSearchResult>();
+
+  for (const item of items) {
+    const key = [
+      fold(item.company),
+      fold(item.title),
+      fold(item.location ?? ''),
+    ].join('|');
+
+    const current = best.get(key);
+
+    if (!current || (item.postedAt ?? '') > (current.postedAt ?? '')) {
+      best.set(key, item);
+    }
+  }
+
+  return [...best.values()];
 }
 
 /** Remetentes do LinkedIn que já sabemos que não são digest de vagas. */
