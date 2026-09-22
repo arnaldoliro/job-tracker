@@ -85,6 +85,22 @@ export function isAtsBrand(name: string): boolean {
     .some((token) => token !== '' && ATS_BRANDS.has(token));
 }
 
+/**
+ * Remetentes cujo email é digest de vagas, nunca correspondência de uma
+ * candidatura sua.
+ *
+ * Mora aqui e não no parser porque é conhecimento sobre email, e porque o
+ * `relinkOrphans()` precisa dele sem depender da descoberta.
+ */
+export const JOB_DIGEST_SENDERS: readonly string[] = [
+  'jobalerts-noreply@linkedin.com',
+  'jobs-listings@linkedin.com',
+];
+
+export function isJobDigestSender(address: string): boolean {
+  return JOB_DIGEST_SENDERS.includes(address.trim().toLowerCase());
+}
+
 /** `no-reply@mail.greenhouse.io` → `greenhouse.io`. */
 export function domainOf(address: string): string | null {
   const at = address.lastIndexOf('@');

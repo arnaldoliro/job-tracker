@@ -2,6 +2,7 @@ import {
   boardSlugFromUrl,
   isAtsBrand,
   isAtsDomain,
+  isJobDigestSender,
   mentionsCompany,
   stripVia,
 } from './ats';
@@ -72,6 +73,17 @@ describe('ats', () => {
     );
     expect(boardSlugFromUrl('https://empresa.com/vagas/1')).toBeNull();
     expect(boardSlugFromUrl(null)).toBeNull();
+  });
+
+  it('reconhece remetente de digest de vagas', () => {
+    // Estes nunca podem ser revinculados a uma candidatura: um alerta cita
+    // seis empresas, e casar com uma delas colocaria 10 KB de digest na linha
+    // do tempo da candidatura.
+    expect(isJobDigestSender('jobalerts-noreply@linkedin.com')).toBe(true);
+    expect(isJobDigestSender('JobAlerts-Noreply@LinkedIn.com')).toBe(true);
+    // O remetente das CONFIRMAÇÕES não entra: candidatura de verdade vem dele.
+    expect(isJobDigestSender('jobs-noreply@linkedin.com')).toBe(false);
+    expect(isJobDigestSender('no-reply@greenhouse.io')).toBe(false);
   });
 
   it('exige fronteira de palavra ao comparar empresa', () => {

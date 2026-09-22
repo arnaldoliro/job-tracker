@@ -16,6 +16,7 @@ import type {
 import { ApplicationService } from '../application/application.service';
 import type { Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
+import { JOB_DIGEST_SENDERS } from './ats';
 import { classify, companyGuess } from './confirmation';
 import { fetchSince, ImapError, type ImapConfig } from './imap.client';
 import {
@@ -328,7 +329,18 @@ export class EmailService {
    */
   private async relinkOrphans(): Promise<number> {
     const orphans = await this.prisma.emailMessage.findMany({
-      where: { applicationId: null, receivedAt: { gte: daysAgo(RELINK_DAYS) } },
+      where: {
+        applicationId: null,
+        receivedAt: { gte: daysAgo(RELINK_DAYS) },
+        // Digest de vagas nunca é correspondência de candidatura. Sem isto, um
+        // alerta citando seis empresas pode casar com uma delas e entrar na
+        // LINHA DO TEMPO da candidatura carregando 10 KB de digest — e sumir
+        // da caixa de não vinculados, onde você o veria.
+        //
+        // Também encurta o laço, que reexamina todo órfão de 90 dias a cada
+        // sincronização e vai passar a receber ~250 alertas por ano.
+        fromAddress: { notIn: [...JOB_DIGEST_SENDERS] },
+      },
       select: {
         id: true,
         fromAddress: true,
