@@ -28,7 +28,7 @@ const items: NavItem[] = [
   { id: "candidaturas", label: "Candidaturas", icon: <IconList />, href: "/" },
   { id: "vagas", label: "Vagas", icon: <IconBriefcase />, href: "/vagas" },
   { id: "curriculo", label: "Currículo", icon: <IconDocument />, href: "/curriculo" },
-  { id: "emails", label: "Emails", icon: <IconMail /> },
+  { id: "emails", label: "Emails", icon: <IconMail />, href: "/emails" },
   { id: "metricas", label: "Métricas", icon: <IconChart /> },
 ];
 

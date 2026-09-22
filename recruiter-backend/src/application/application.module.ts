@@ -8,5 +8,8 @@ import { ApplicationService } from './application.service';
   imports: [ProfileModule],
   controllers: [ApplicationController],
   providers: [ApplicationService],
+  // Exportado para o EmailModule: criar candidatura a partir de um email tem
+  // que passar pelo mesmo `create()`, não por um insert próprio.
+  exports: [ApplicationService],
 })
 export class ApplicationModule {}

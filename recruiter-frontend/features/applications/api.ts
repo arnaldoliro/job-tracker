@@ -3,11 +3,13 @@ import {
   applicationListSchema,
   applicationSchema,
   createApplicationSchema,
+  timelineSchema,
   updateApplicationSchema,
 } from "@recruit/shared";
 import type {
   Application,
   CreateApplicationInput,
+  TimelineEntry,
   UpdateApplicationInput,
 } from "@recruit/shared";
 import { env } from "@/lib/env";
@@ -84,4 +86,9 @@ export async function updateApplication(
 
 export async function deleteApplication(id: string): Promise<void> {
   await request(`/applications/${id}`, { method: "DELETE" });
+}
+
+/** Eventos de status e emails da candidatura, já ordenados pelo servidor. */
+export async function getTimeline(id: string): Promise<TimelineEntry[]> {
+  return timelineSchema.parse(await request(`/applications/${id}/timeline`));
 }

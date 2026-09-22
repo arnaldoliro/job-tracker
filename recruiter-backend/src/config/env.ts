@@ -27,6 +27,29 @@ export const envSchema = z.object({
   IMAP_PORT: z.coerce.number().int().positive().default(993),
   IMAP_USER: optionalString,
   IMAP_PASSWORD: optionalString,
+  /**
+   * O rótulo do Gmail que o app lê. Rótulo é pasta no IMAP.
+   *
+   * Ler um rótulo dedicado em vez da INBOX faz o "nunca mandar a caixa inteira
+   * para fora" da seção 4 ser garantido pelo Gmail, antes de o código ver
+   * qualquer coisa — e muda pelo filtro do Gmail, sem tocar em código.
+   */
+  IMAP_MAILBOX: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().min(1).default('job-tracker'),
+  ),
+  /**
+   * Sincronizar ao subir o processo. Desligado por padrão de propósito: em
+   * `nest start --watch` o backend reinicia a cada arquivo salvo, e isso viraria
+   * uma conexão IMAP por gravação.
+   *
+   * NÃO usar `z.coerce.boolean()`: ele converte a string "false" em `true`.
+   */
+  IMAP_SYNC_ON_BOOT: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() === 'true' : value),
+    z.boolean().default(false),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;
