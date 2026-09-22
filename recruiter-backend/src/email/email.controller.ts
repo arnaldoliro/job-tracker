@@ -7,10 +7,12 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   createApplicationFromEmailSchema,
   linkEmailSchema,
+  syncEmailsSchema,
 } from '@recruit/shared';
 import type {
   Application,
@@ -19,6 +21,7 @@ import type {
   EmailStatus,
   EmailSyncResult,
   LinkEmailInput,
+  SyncEmailsQuery,
   TimelineEntry,
 } from '@recruit/shared';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -41,8 +44,10 @@ export class EmailController {
   }
 
   @Post('emails/sync')
-  sync(): Promise<EmailSyncResult> {
-    return this.emails.sync();
+  sync(
+    @Query(new ZodValidationPipe(syncEmailsSchema)) query: SyncEmailsQuery,
+  ): Promise<EmailSyncResult> {
+    return this.emails.sync(query.days);
   }
 
   @Post('emails/:id/link')

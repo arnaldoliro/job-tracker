@@ -128,6 +128,23 @@ export type EmailStatus = z.infer<typeof emailStatusSchema>;
  * única — uma queda no meio deixa resultado parcial válido, e a tela precisa
  * poder dizer isso em vez de fingir sucesso.
  */
+/**
+ * Buscar mais para trás do que a marca d'água alcança.
+ *
+ * A retomada é derivada da data do último email guardado, o que é certo no
+ * dia a dia e impossível de contornar quando o conjunto MUDA no servidor:
+ * ampliar um filtro do Gmail traz para o rótulo emails antigos que a marca
+ * d'água já passou, e eles nunca seriam vistos.
+ *
+ * Limitado a 90 dias porque isto é um resgate pontual, não um modo de uso —
+ * o Gmail cobra cada dia dessa janela em tempo de busca.
+ */
+export const syncEmailsSchema = z.strictObject({
+  days: z.coerce.number().int().min(1).max(90).optional(),
+});
+
+export type SyncEmailsQuery = z.infer<typeof syncEmailsSchema>;
+
 export const emailSyncResultSchema = z.object({
   fetched: z.number().int(),
   stored: z.number().int(),

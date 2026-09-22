@@ -92,7 +92,7 @@ export class EmailService {
    * resultado parcial válido em vez de perder tudo, e o que falhou volta no
    * `failed` para a tela poder dizer que a lista está incompleta.
    */
-  async sync(): Promise<EmailSyncResult> {
+  async sync(backfillDays?: number): Promise<EmailSyncResult> {
     if (!this.config) {
       throw new ServiceUnavailableException({
         error: 'Service Unavailable',
@@ -118,7 +118,10 @@ export class EmailService {
     let linked = 0;
 
     try {
-      const mails = await fetchSince(this.config, await this.watermark());
+      const mails = await fetchSince(
+        this.config,
+        await this.watermark(backfillDays),
+      );
 
       for (const mail of mails) {
         try {
@@ -176,7 +179,14 @@ export class EmailService {
    * para sempre, em silêncio. O `receivedAt` vem do INTERNALDATE justamente
    * para reduzir esse risco, mas o limite fica como segunda barreira.
    */
-  private async watermark(): Promise<Date> {
+  private async watermark(backfillDays?: number): Promise<Date> {
+    // Resgate explícito vence a marca d'água. Sem isto, ampliar o filtro do
+    // Gmail é irrecuperável: os emails antigos entram no rótulo, mas a marca
+    // já passou deles e a deduplicação nunca chega a vê-los.
+    if (backfillDays !== undefined) {
+      return daysAgo(backfillDays);
+    }
+
     const latest = await this.prisma.emailMessage.findFirst({
       orderBy: { receivedAt: 'desc' },
       select: { receivedAt: true },
