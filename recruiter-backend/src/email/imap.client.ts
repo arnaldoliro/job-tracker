@@ -69,6 +69,17 @@ export async function fetchSince(
     socketTimeout: CONNECT_TIMEOUT_MS * 3,
   });
 
+  // `imapflow` emite `error` no próprio cliente, como EventEmitter — inclusive
+  // DEPOIS do logout, quando o socket morre sozinho. Em Node, evento `error`
+  // sem listener derruba o PROCESSO INTEIRO: contra a caixa real isso matou a
+  // API junto com a sincronização. O `try/catch` em volta do `await` não pega,
+  // porque não é a promise que rejeita.
+  //
+  // Nada a fazer aqui além de existir: com a operação em curso, o erro real
+  // chega pelo `await` logo abaixo; depois do logout, socket caindo é só
+  // barulho de desmontagem.
+  client.on('error', () => {});
+
   try {
     await client.connect();
   } catch (error) {
@@ -82,7 +93,15 @@ export async function fetchSince(
     // sincronização marcaria como lidos os emails da caixa pessoal.
     await client.mailboxOpen(config.mailbox, { readOnly: true });
 
-    const found: FetchedMail[] = [];
+    // DUAS PASSADAS, e isto não é estilo: o IMAP executa um comando por vez, e
+    // o iterador de `fetch` segura a conexão enquanto está aberto. Baixar o
+    // corpo de dentro do laço emite um segundo comando que espera o primeiro
+    // terminar — que espera o segundo. A conexão trava até o `socketTimeout`
+    // e a rodada morre com "Connection not available".
+    //
+    // O sintoma engana: com a caixa vazia não há corpo para baixar e tudo
+    // passa. Só quebra quando existe mensagem, que é o caso que importa.
+    const envelopes: FetchMessageObject[] = [];
 
     for await (const message of client.fetch(
       { since },
@@ -94,6 +113,12 @@ export async function fetchSince(
         threadId: true,
       },
     )) {
+      envelopes.push(message);
+    }
+
+    const found: FetchedMail[] = [];
+
+    for (const message of envelopes) {
       const mail = await readOne(client, message);
 
       if (mail) {

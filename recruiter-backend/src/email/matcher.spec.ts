@@ -1,5 +1,6 @@
 import {
   boardSlugFromUrl,
+  isAtsBrand,
   isAtsDomain,
   mentionsCompany,
   stripVia,
@@ -216,6 +217,44 @@ describe('classify', () => {
   it('email comum fica desconhecido', () => {
     expect(classify('almoço amanhã?', 'bora?')).toBe('desconhecido');
   });
+
+  /**
+   * "Candidate-se agora" é CONVITE — você ainda não se candidatou —, e vem do
+   * mesmo remetente que a confirmação (`jobs-noreply@linkedin.com`). Filtrar
+   * por remetente não separa os dois; só o texto separa.
+   */
+  it.each([
+    'Arnaldo, candidate-se agora à vaga de Desenvolvedor Node.js na Jobbol',
+    'A empresa Mendelics está contratando para um cargo de Remota',
+  ])('convite para se candidatar é alerta, não candidatura: %s', (subject) => {
+    expect(classify(subject, null)).toBe('alerta');
+  });
+
+  it('reconhece a confirmação sem verbo do LinkedIn', () => {
+    expect(
+      classify(
+        'Sua candidatura a Desenvolvedor full stack (Node.JS) na Tata',
+        null,
+      ),
+    ).toBe('confirmacao');
+  });
+
+  it('a forma sem verbo perde para sinal de que o processo andou', () => {
+    // Ela é o sinal mais fraco: no corpo de uma rejeição a mesma frase
+    // apareceria em rodapé, dizendo o oposto do que o email diz.
+    expect(
+      classify(
+        'Sua candidatura a Backend na Stone',
+        'infelizmente seguimos com outro',
+      ),
+    ).toBe('atualizacao');
+  });
+
+  it('só vale no começo do assunto', () => {
+    expect(classify('Atualização sobre sua candidatura a Backend', null)).toBe(
+      'desconhecido',
+    );
+  });
 });
 
 describe('companyGuess', () => {
@@ -233,5 +272,49 @@ describe('companyGuess', () => {
     expect(
       companyGuess('Recrutamento', 'no-reply@greenhouse.io', ''),
     ).toBeNull();
+  });
+
+  /**
+   * Os quatro emails abaixo são os únicos de candidatura que existem na caixa
+   * real — todos do LinkedIn, que é por onde as candidaturas foram feitas.
+   *
+   * Antes destes testes os quatro caíam como `desconhecido` com empresa
+   * "LinkedIn": nenhuma oferta de criar candidatura, e empresa errada se você
+   * criasse assim mesmo. A ingestão funcionava e não servia para nada.
+   */
+  it.each([
+    ['Arnaldo, sua candidatura foi enviada à DS3 Digital', 'DS3 Digital'],
+    [
+      'Arnaldo, sua candidatura foi enviada à Tata Consultancy Services',
+      'Tata Consultancy Services',
+    ],
+    ['Arnaldo, sua candidatura foi enviada à Jobgether', 'Jobgether'],
+    [
+      'Arnaldo, sua candidatura foi enviada à Dimensa Tecnologia',
+      'Dimensa Tecnologia',
+    ],
+  ])('lê a empresa do aviso do LinkedIn: %s', (subject, empresa) => {
+    expect(classify(subject, null)).toBe('confirmacao');
+    expect(companyGuess('LinkedIn', 'jobs-noreply@linkedin.com', subject)).toBe(
+      empresa,
+    );
+  });
+
+  it('o nome do portal não qualifica como empresa', () => {
+    // `stripVia` resolve "Nubank via Greenhouse", onde há sufixo a remover.
+    // Não resolve "LinkedIn", que manda em nome próprio.
+    expect(isAtsBrand('LinkedIn')).toBe(true);
+    expect(isAtsBrand('LinkedIn Job Alerts')).toBe(true);
+    expect(isAtsBrand('Nubank')).toBe(false);
+    // Por token, não por substring: "Leverage" não pode virar "lever".
+    expect(isAtsBrand('Leverage')).toBe(false);
+  });
+
+  it('a âncora da preposição não pode ser \\b', () => {
+    // `\b` é definido por [A-Za-z0-9_], então não existe fronteira antes de
+    // "à" e a alternativa nunca casaria. Mesmo defeito que ".NET" teve.
+    expect(
+      companyGuess('LinkedIn', 'jobs-noreply@linkedin.com', 'enviada à Stone'),
+    ).toBe('Stone');
   });
 });

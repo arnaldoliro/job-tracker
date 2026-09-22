@@ -1,6 +1,6 @@
 import type { EmailKind } from '@recruit/shared';
 import { fold } from '../job/discovery/normalize';
-import { domainOf, isAtsDomain, stripVia } from './ats';
+import { domainOf, isAtsBrand, isAtsDomain, stripVia } from './ats';
 
 /**
  * O que o email parece ser, por padrão de texto — não por modelo.
@@ -21,6 +21,12 @@ const CONFIRMATION = [
   'recebemos a sua candidatura',
   'candidatura recebida',
   'sua candidatura foi recebida',
+  // O LinkedIn diz "enviada", não "recebida" — e é de onde vem a candidatura
+  // quando se aplica por lá, que na caixa real é a única origem que existe.
+  'sua candidatura foi enviada',
+  'candidatura enviada',
+  'your application was sent',
+  'application sent',
   'obrigado por se candidatar',
   'obrigada por se candidatar',
   'inscricao confirmada',
@@ -35,6 +41,14 @@ const CONFIRMATION = [
 ];
 
 const ALERT = [
+  // "Candidate-se agora à vaga de X na Y" e "A empresa X está contratando"
+  // são CONVITES: você ainda não se candidatou. Vêm do mesmo remetente que as
+  // confirmações (`jobs-noreply@linkedin.com`), então só o texto separa.
+  'candidate-se agora',
+  'candidate-se a ',
+  'esta contratando',
+  'apply now',
+  'is hiring',
   'vagas para voce',
   'novas vagas',
   'vagas recomendadas',
@@ -66,6 +80,20 @@ const UPDATE = [
   'offer',
 ];
 
+/**
+ * Confirmação sem verbo: "Sua candidatura a <cargo> na <empresa>".
+ *
+ * Só vale no COMEÇO DO ASSUNTO, e só depois de `UPDATE` não ter casado. No
+ * corpo, essa forma aparece em rodapé de rejeição — "sobre sua candidatura a
+ * X" — e diria o oposto do que o email diz.
+ */
+const SUBJECT_CONFIRMATION = [
+  'sua candidatura a ',
+  'sua candidatura para ',
+  'your application to ',
+  'your application for ',
+];
+
 export function classify(subject: string, bodyText: string | null): EmailKind {
   const haystack = fold(`${subject} ${bodyText ?? ''}`);
 
@@ -81,6 +109,14 @@ export function classify(subject: string, bodyText: string | null): EmailKind {
 
   if (UPDATE.some((phrase) => haystack.includes(phrase))) {
     return 'atualizacao';
+  }
+
+  // Por último de propósito: é o sinal mais fraco, e perde para qualquer
+  // evidência de que o processo já andou.
+  const title = fold(subject);
+
+  if (SUBJECT_CONFIRMATION.some((phrase) => title.startsWith(phrase))) {
+    return 'confirmacao';
   }
 
   return 'desconhecido';
@@ -100,7 +136,7 @@ export function companyGuess(
 ): string | null {
   const display = stripVia(fromName);
 
-  if (display && !looksLikeRobot(display)) {
+  if (display && !looksLikeRobot(display) && !isAtsBrand(display)) {
     return display;
   }
 
@@ -146,8 +182,15 @@ function looksLikeRobot(name: string): boolean {
 
 /** "Sua candidatura para X na Nubank" / "Your application at Nubank". */
 function companyFromSubject(subject: string): string | null {
+  // "à" e "ao" entram porque o LinkedIn escreve "candidatura foi enviada à
+  // DS3 Digital". Sem elas a expressão desiste do assunto e o palpite cai no
+  // nome de exibição do remetente — que nesses emails é "LinkedIn".
+  //
+  // A âncora é `(?:^|\s)`, não `\b`: fronteira de palavra é definida por
+  // [A-Za-z0-9_], então não existe `\b` antes de "à" e a alternativa nunca
+  // casaria. Mesmo defeito que `\b` teve com ".NET" e "C#" na descoberta.
   const match = subject.match(
-    /(?:\b(?:na|no|em|at|with|para a|para o)\s+)([A-ZÁÂÃÉÊÍÓÔÕÚÇ][\w&.-]*(?:\s+[A-ZÁÂÃÉÊÍÓÔÕÚÇ][\w&.-]*){0,2})\s*$/,
+    /(?:^|\s)(?:na|no|em|at|with|para a|para o|ao|aos|à|às)\s+([A-ZÁÂÃÉÊÍÓÔÕÚÇ][\w&.-]*(?:\s+[A-ZÁÂÃÉÊÍÓÔÕÚÇ][\w&.-]*){0,2})\s*$/,
   );
 
   return match ? match[1].trim() : null;

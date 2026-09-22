@@ -43,6 +43,48 @@ const ATS_DOMAINS = new Set([
   'indeed.com',
 ]);
 
+/**
+ * O nome de exibição é o do PRÓPRIO portal, e não o de uma empresa.
+ *
+ * `stripVia` resolve "Nubank via Greenhouse", onde há um sufixo para remover.
+ * Não resolve "LinkedIn", que é o remetente quando a candidatura foi feita
+ * pelo portal — e aí o palpite de empresa devolveria "LinkedIn" para toda
+ * candidatura feita por lá.
+ */
+const ATS_BRANDS = new Set([
+  'linkedin',
+  'greenhouse',
+  'lever',
+  'ashby',
+  'ashbyhq',
+  'gupy',
+  'workable',
+  'smartrecruiters',
+  'icims',
+  'workday',
+  'taleo',
+  'breezy',
+  'recruitee',
+  'jobvite',
+  'teamtailor',
+  'bamboohr',
+  'remoteok',
+  'remotive',
+  'infojobs',
+  'vagas',
+  'indeed',
+  'glassdoor',
+  'catho',
+]);
+
+export function isAtsBrand(name: string): boolean {
+  // Por token, não por substring: "LinkedIn Job Alerts" também é o portal,
+  // e uma empresa chamada "Leverage" não pode virar "lever".
+  return fold(name)
+    .split(/[^a-z0-9]+/)
+    .some((token) => token !== '' && ATS_BRANDS.has(token));
+}
+
 /** `no-reply@mail.greenhouse.io` → `greenhouse.io`. */
 export function domainOf(address: string): string | null {
   const at = address.lastIndexOf('@');
