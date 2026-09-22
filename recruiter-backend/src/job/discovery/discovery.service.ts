@@ -11,7 +11,7 @@ import { GreenhouseSource } from './sources/greenhouse';
 import { GupySource } from './sources/gupy';
 import { LeverSource } from './sources/lever';
 import { RemoteOkSource, RemotiveSource } from './sources/remote-boards';
-import { fold } from './normalize';
+import { countryFromText, fold } from './normalize';
 import type { DiscoveryQuery, DiscoverySource } from './provider';
 import { scoreJob, sortKey } from './scoring';
 
@@ -224,7 +224,11 @@ function matchesTerm(job: JobSearchResult, term?: string): boolean {
  * E campo que a vaga não declarou PASSA: cortar em silêncio esconde vaga boa
  * por defeito do portal, e o usuário não fica sabendo do que perdeu.
  */
-function matches(job: JobSearchResult, preferences: JobPreferences): boolean {
+/** Exportada para teste: é o filtro que decide se uma vaga existe para você. */
+export function matches(
+  job: JobSearchResult,
+  preferences: JobPreferences,
+): boolean {
   const title = fold(job.title);
 
   if (preferences.titleExcludes.some((term) => title.includes(fold(term)))) {
@@ -275,15 +279,23 @@ function withinScope(
     return true;
   }
 
-  const isBrazil = job.location ? /bra[sz]il/i.test(job.location) : null;
+  // `countryFromText` e não um teste por "brasil" no texto: o teste literal
+  // tratava QUALQUER localização não nula sem a palavra "brasil" como
+  // definitivamente estrangeira. Das formas que o LinkedIn usa — "Salvador,
+  // BA", "São Paulo, SP", "Porto Alegre, RS", "São Paulo e Região" — quatro em
+  // cinco eram descartadas, sem log e sem entrar em `failedSources`.
+  const country = countryFromText(job.location);
 
-  // Localização não reconhecida passa, pela mesma regra acima. Na prática é
-  // raro: quase toda vaga declara cidade ou país em algum formato.
-  if (isBrazil === null) {
+  // Localização não reconhecida passa, pela mesma regra acima — agora de
+  // verdade, porque `countryFromText` devolve `null` quando não sabe em vez de
+  // afirmar "não é Brasil".
+  if (country === null) {
     return true;
   }
 
-  return preferences.scope === 'brasil' ? isBrazil : !isBrazil;
+  return preferences.scope === 'brasil'
+    ? country === 'Brasil'
+    : country !== 'Brasil';
 }
 
 function describe(reason: unknown): string {
