@@ -31,6 +31,28 @@ export interface SearchResultItem {
   saved: boolean;
 }
 
+/**
+ * Nome da fonte como você a reconhece, não como o código a chama.
+ *
+ * `linkedin-alerts` diz de onde a vaga veio de um jeito que importa: ela
+ * chegou no SEU email, escolhida pelo LinkedIn para o seu perfil — é um sinal
+ * de aderência que a pontuação não calcula.
+ */
+const SOURCE_LABELS: Record<string, string> = {
+  "linkedin-alerts": "alerta LinkedIn",
+  greenhouse: "Greenhouse",
+  ashby: "Ashby",
+  lever: "Lever",
+  gupy: "Gupy",
+  remoteok: "RemoteOK",
+  remotive: "Remotive",
+  "portais-br": "portais BR",
+};
+
+function sourceLabel(source: string): string {
+  return SOURCE_LABELS[source] ?? source;
+}
+
 export function ResultCard({
   profileId,
   item,
@@ -125,8 +147,11 @@ export function ResultCard({
             {result.title}
           </span>
         </div>
-        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-          {result.source}
+        <span
+          className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+          title={`Origem: ${sourceLabel(result.source)}`}
+        >
+          {sourceLabel(result.source)}
         </span>
       </div>
 
