@@ -413,24 +413,44 @@ export class EmailService {
   /** A caixa não é por perfil: existe uma conta de email e vários perfis. */
   async listUnlinked(): Promise<EmailMessage[]> {
     const rows = await this.prisma.emailMessage.findMany({
-      where: { applicationId: null },
+      where: {
+        applicationId: null,
+        // Digest de vagas fora, e a exclusão precisa estar AQUI e não depois
+        // do `map`: o `take` corta antes de classificar, e são ~250 alertas
+        // por ano contra ~16 candidaturas. Filtrando em memória, a tela
+        // mostraria 100 alertas e nenhuma candidatura.
+        //
+        // Eles não somem do sistema — alimentam a descoberta de vagas. Esta
+        // tela é para o que você pode vincular, e alerta nunca vincula.
+        fromAddress: { notIn: [...JOB_DIGEST_SENDERS] },
+      },
       orderBy: { receivedAt: 'desc' },
       take: 100,
     });
 
-    return rows.map((row) => ({
-      id: row.id,
-      applicationId: row.applicationId,
-      fromAddress: row.fromAddress,
-      fromName: row.fromName,
-      subject: row.subject,
-      receivedAt: row.receivedAt.toISOString(),
-      kind: classify(row.subject, row.bodyText),
-      preview: row.bodyText
-        ? row.bodyText.replace(/\s+/g, ' ').slice(0, PREVIEW_CHARS)
-        : null,
-      companyGuess: companyGuess(row.fromName, row.fromAddress, row.subject),
-    }));
+    return (
+      rows
+        .map((row) => ({
+          id: row.id,
+          applicationId: row.applicationId,
+          fromAddress: row.fromAddress,
+          fromName: row.fromName,
+          subject: row.subject,
+          receivedAt: row.receivedAt.toISOString(),
+          kind: classify(row.subject, row.bodyText),
+          preview: row.bodyText
+            ? row.bodyText.replace(/\s+/g, ' ').slice(0, PREVIEW_CHARS)
+            : null,
+          companyGuess: companyGuess(
+            row.fromName,
+            row.fromAddress,
+            row.subject,
+          ),
+        }))
+        // Rede de segurança: um remetente de alerta que ainda não esteja na
+        // lista cai aqui pelo texto.
+        .filter((email) => email.kind !== 'alerta')
+    );
   }
 
   async link(id: string, applicationId: string): Promise<void> {
