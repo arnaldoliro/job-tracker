@@ -13,6 +13,8 @@
  *   Lever       hostedUrl  vs  applyUrl (= hostedUrl + "/apply")
  *   Ashby       jobUrl     vs  applyUrl (= jobUrl + "/application")
  *   Gupy        `?jobBoardSource=gupy_portal` no fim de todas
+ *   LinkedIn    /comm/jobs/view/123  vs  /jobs/view/123, `www.` vs `br.`,
+ *               slug opcional antes do id, e oito parâmetros de rastreio
  */
 
 /** Hosts que servem o mesmo board sob nomes diferentes. */
@@ -46,6 +48,25 @@ export function canonicalJobUrl(rawUrl: string): string | null {
   url.protocol = 'https:';
   url.hostname =
     HOST_ALIASES[url.hostname.toLowerCase()] ?? url.hostname.toLowerCase();
+
+  // LinkedIn é uma REGRA de host, não uma entrada em `HOST_ALIASES`: um mapa
+  // estático não expressa `*.linkedin.com`, e `br.linkedin.com` é exatamente o
+  // que se obtém copiando link de uma sessão deslogada.
+  if (
+    url.hostname === 'linkedin.com' ||
+    url.hostname.endsWith('.linkedin.com')
+  ) {
+    const job = url.pathname.match(
+      /^(?:\/comm)?\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/,
+    );
+
+    // `null` para qualquer outro caminho, e isto é o que importa: como a query
+    // já foi descartada acima, `/jobs/search/?currentJobId=123` viraria
+    // `/jobs/search` — e DUAS vagas diferentes colapsariam numa identidade só.
+    // Uma dispensa esconderia as duas, e `Job.url @unique` colidiria. Devolver
+    // `null` transforma colisão silenciosa no erro que `dismiss()` já trata.
+    return job ? `https://www.linkedin.com/jobs/view/${job[1]}` : null;
+  }
 
   let path = url.pathname.replace(/\/+$/, '');
 
