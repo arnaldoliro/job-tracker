@@ -1,5 +1,5 @@
 import type { JobPreferences, JobSearchResult } from '@recruit/shared';
-import { matches } from './discovery.service';
+import { matches } from './filters';
 
 /**
  * O filtro de escopo, pelo caminho que a descoberta realmente usa.
