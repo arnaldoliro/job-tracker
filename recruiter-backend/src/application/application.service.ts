@@ -9,17 +9,8 @@ import type {
   UpdateApplicationInput,
 } from '@recruit/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { active } from './active';
 import type { ApplicationModel, JobModel } from '../generated/prisma/models';
-
-/**
- * Filtro obrigatório em toda query. Candidatura com `deletedAt` preenchido não
- * existe para o negócio — nem na lista, nem nas métricas.
- *
- * Enquanto este for o único service que lê `Application`, repetir a condição
- * aqui basta. Se a leitura se espalhar, vale uma extensão do Prisma Client para
- * o filtro deixar de depender de alguém lembrar.
- */
-const active = { deletedAt: null };
 
 /** O que a API expõe da vaga. Menos que a tabela, de propósito. */
 const jobSelect = {

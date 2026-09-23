@@ -82,6 +82,7 @@ model Profile {
   emailMessages  EmailMessage[]
   savedJobs      SavedJob[]
   dismissedJobs  DismissedJob[]
+  discoveredJobs DiscoveredJob[]
 }
 
 /// Vaga que este perfil recusou na descoberta.
@@ -107,6 +108,40 @@ model DismissedJob {
 
   @@unique([profileId, jobUrl])
   @@index([profileId, dismissedAt])
+}
+
+/// Vaga que a descoberta chegou a te MOSTRAR.
+///
+/// A descoberta é sem estado: faz o leque de fontes ao vivo, guarda 15 minutos
+/// em memória e descarta. Sem esta tabela não existe resposta para "quantas
+/// vagas recebi" — `Job.createdAt` é a data em que a vaga foi SALVA, não em
+/// que apareceu.
+///
+/// Grava o lote devolvido, não tudo o que as fontes trouxeram: "recebeu"
+/// significa "foi mostrada a você". As ~2.000 que o leque produz por rodada
+/// são em maioria filtradas e nunca vistas, e contá-las diria que você recebe
+/// duas mil vagas por dia — as mesmas, todo dia.
+///
+/// Por perfil, porque o filtro é por perfil: a mesma vaga mostrada a dois
+/// perfis são dois recebimentos.
+///
+/// É também o denominador que falta — hoje `DismissedJob` existe sem nada
+/// contra o que dividir.
+model DiscoveredJob {
+  id        String @id @default(cuid())
+  profileId String
+
+  /// Canônica, pela mesma `canonicalJobUrl` de `Job.url` e `DismissedJob.jobUrl`.
+  /// Aplicada no ponto de escrita, não assumida — ver `JobService.recordSeen`.
+  url    String
+  source String
+
+  firstSeenAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, url])
+  @@index([profileId, firstSeenAt])
 }
 
 /// A vaga em si. Não tem profileId de propósito: a vaga é da empresa, e dois

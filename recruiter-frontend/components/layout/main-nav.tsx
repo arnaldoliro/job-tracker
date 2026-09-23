@@ -29,7 +29,7 @@ const items: NavItem[] = [
   { id: "vagas", label: "Vagas", icon: <IconBriefcase />, href: "/vagas" },
   { id: "curriculo", label: "Currículo", icon: <IconDocument />, href: "/curriculo" },
   { id: "emails", label: "Emails", icon: <IconMail />, href: "/emails" },
-  { id: "metricas", label: "Métricas", icon: <IconChart /> },
+  { id: "metricas", label: "Métricas", icon: <IconChart />, href: "/metricas" },
 ];
 
 /** "/" só casa exato; as demais casam com as subrotas (/vagas/salvas, /vagas/x). */
