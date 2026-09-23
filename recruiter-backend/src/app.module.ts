@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { ApplicationModule } from './application/application.module';
 import { EmailModule } from './email/email.module';
 import { JobModule } from './job/job.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { validateEnv } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
@@ -23,6 +24,7 @@ import { ProfileModule } from './profile/profile.module';
     ApplicationModule,
     JobModule,
     EmailModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
