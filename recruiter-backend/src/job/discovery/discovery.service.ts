@@ -3,14 +3,16 @@ import type {
   DiscoverResult,
   JobPreferences,
   JobSearchResult,
-  Seniority,
 } from '@recruit/shared';
 import { AshbySource } from './sources/ashby';
 import { BrazilPortalsSource } from './sources/br-portals';
 import { GreenhouseSource } from './sources/greenhouse';
 import { GupySource } from './sources/gupy';
 import { LeverSource } from './sources/lever';
+import { PrismaService } from '../../prisma/prisma.service';
+import { LinkedInAlertsSource } from './sources/linkedin-alerts';
 import { RemoteOkSource, RemotiveSource } from './sources/remote-boards';
+import { matches, matchesTerm } from './filters';
 import { fold } from './normalize';
 import type { DiscoveryQuery, DiscoverySource } from './provider';
 import { scoreJob, sortKey } from './scoring';
@@ -53,15 +55,23 @@ interface Collected extends Omit<CacheEntry, 'at'> {
 export class DiscoveryService {
   private readonly logger = new Logger(DiscoveryService.name);
 
-  private readonly sources: DiscoverySource[] = [
-    new GupySource(),
-    new GreenhouseSource(),
-    new AshbySource(),
-    new LeverSource(),
-    new RemoteOkSource(),
-    new RemotiveSource(),
-    new BrazilPortalsSource(),
-  ];
+  private readonly sources: DiscoverySource[];
+
+  constructor(prisma: PrismaService) {
+    this.sources = [
+      new GupySource(),
+      new GreenhouseSource(),
+      new AshbySource(),
+      new LeverSource(),
+      new RemoteOkSource(),
+      new RemotiveSource(),
+      new BrazilPortalsSource(),
+      // Por último: a ordem do array é prioridade de deduplicação, e o alerta
+      // é o registro mais pobre de qualquer vaga que ele compartilhe — não
+      // traz descrição. Se a mesma vaga vier do Greenhouse, a versão rica vence.
+      new LinkedInAlertsSource(prisma),
+    ];
+  }
 
   private readonly cache = new Map<string, CacheEntry>();
 
@@ -192,98 +202,6 @@ async function withDeadline(
       ).unref(),
     ),
   ]);
-}
-
-/**
- * O texto digitado também FILTRA, e não só orienta as fontes.
- *
- * Gupy e os portais aceitam termo de busca; Greenhouse, Ashby e Lever devolvem
- * o board inteiro e ignoram. Sem este corte, digitar "clojure" trazia 518
- * vagas — a caixa dizia "filtrar" e não filtrava.
- */
-function matchesTerm(job: JobSearchResult, term?: string): boolean {
-  const wanted = fold(term ?? '');
-
-  if (wanted === '') {
-    return true;
-  }
-
-  const haystack = fold(
-    [job.title, job.company, job.stack.join(' '), job.location].join(' '),
-  );
-
-  // Todas as palavras precisam aparecer: "backend go" não pode trazer toda
-  // vaga que tenha "backend" OU "go".
-  return wanted.split(' ').every((word) => haystack.includes(word));
-}
-
-/**
- * Corte pelas preferências.
- *
- * Preferência ELIMINA, currículo ORDENA — são coisas diferentes de propósito.
- * E campo que a vaga não declarou PASSA: cortar em silêncio esconde vaga boa
- * por defeito do portal, e o usuário não fica sabendo do que perdeu.
- */
-function matches(job: JobSearchResult, preferences: JobPreferences): boolean {
-  const title = fold(job.title);
-
-  if (preferences.titleExcludes.some((term) => title.includes(fold(term)))) {
-    return false;
-  }
-
-  if (
-    preferences.titleIncludes.length > 0 &&
-    !preferences.titleIncludes.some((term) => title.includes(fold(term)))
-  ) {
-    return false;
-  }
-
-  if (
-    job.workModel !== null &&
-    preferences.workModels.length > 0 &&
-    !preferences.workModels.includes(job.workModel)
-  ) {
-    return false;
-  }
-
-  if (
-    job.contractType !== null &&
-    preferences.contractTypes.length > 0 &&
-    !preferences.contractTypes.includes(job.contractType)
-  ) {
-    return false;
-  }
-
-  if (
-    job.seniority !== null &&
-    preferences.seniorities.length > 0 &&
-    !preferences.seniorities.includes(job.seniority as Seniority)
-  ) {
-    return false;
-  }
-
-  return withinScope(job, preferences);
-}
-
-function withinScope(
-  job: JobSearchResult,
-  preferences: JobPreferences,
-): boolean {
-  // Nenhum lado escolhido é tanto faz: o estado neutro é a ausência de opção,
-  // não um terceiro valor.
-  if (preferences.scope === null) {
-    return true;
-  }
-
-  const isBrazil = job.location ? /bra[sz]il/i.test(job.location) : null;
-
-  // Localização não reconhecida passa, pela mesma regra acima. Na prática é
-  // raro: quase toda vaga declara cidade ou país em algum formato.
-  if (isBrazil === null) {
-    return true;
-  }
-
-  return preferences.scope === 'brasil' ? isBrazil : !isBrazil;
 }
 
 function describe(reason: unknown): string {

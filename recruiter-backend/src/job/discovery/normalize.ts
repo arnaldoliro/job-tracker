@@ -56,6 +56,16 @@ export function workModelFromText(text: string | null): WorkModel | null {
  */
 const COUNTRY_HINTS: { pattern: RegExp; country: string }[] = [
   { pattern: /\bbra[sz]il\b|\bbrasil\b/, country: 'Brasil' },
+  /**
+   * Cidade brasileira ANTES de Portugal, e isto não é preferência: o padrão
+   * português casa `\bporto\b`, então "Porto Alegre, RS" era classificado como
+   * Portugal — e com `scope: 'brasil'` a vaga sumia.
+   */
+  {
+    pattern:
+      /\bsao paulo\b|\brio de janeiro\b|\bbelo horizonte\b|\bporto alegre\b|\bsalvador\b|\bbrasilia\b|\bcuritiba\b|\brecife\b|\bfortaleza\b|\bcampinas\b|\bflorianopolis\b|\bgoiania\b|\bmanaus\b|\bbelem\b|\bjoao pessoa\b|\bnatal\b|\bmaceio\b|\baracaju\b|\bcuiaba\b|\bcampo grande\b|\bvitoria\b|\bsorocaba\b|\bribeirao preto\b|\bsao jose dos campos\b|\bosasco\b|\bguarulhos\b|\bniteroi\b|\blondrina\b|\bjoinville\b|\bblumenau\b|\buberlandia\b/,
+    country: 'Brasil',
+  },
   {
     pattern: /\bportugal\b|\blisboa\b|\blisbon\b|\bporto\b/,
     country: 'Portugal',
@@ -88,6 +98,18 @@ const COUNTRY_HINTS: { pattern: RegExp; country: string }[] = [
     country: 'Índia',
   },
   { pattern: /\bisrael\b|\btel aviv\b|\bjerusalem\b/, country: 'Israel' },
+  /**
+   * Sigla de UF no fim — "Sorocaba, SP", "Blumenau, SC".
+   *
+   * POR ÚLTIMO de propósito. Várias siglas colidem com estados americanos
+   * (MA, PA, SC, AL, MT, MS), então as cidades estrangeiras precisam casar
+   * antes: "Boston, MA" já saiu como Estados Unidos quando chega aqui.
+   */
+  {
+    pattern:
+      /,\s*(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)\b/,
+    country: 'Brasil',
+  },
 ];
 
 export function countryFromText(text: string | null): string | null {
