@@ -7,8 +7,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-recruit}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recruit}
       POSTGRES_DB: ${POSTGRES_DB:-recruit}
+    # SÓ na interface local. Sem o `127.0.0.1:`, o Docker publica em
+    # 0.0.0.0 e grava a regra direto no iptables — passando POR CIMA do
+    # firewall do sistema. Com a senha padrão, que está no `.env.example`
+    # público, qualquer um na mesma rede lia o banco inteiro, inclusive o corpo
+    # dos seus emails.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -22,8 +27,10 @@ services:
     container_name: job-tracker-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
+    # Mesmo motivo, e pior: este Redis não tem senha. Redis exposto sem
+    # autenticação é vetor conhecido de execução remota (CONFIG SET dir).
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
