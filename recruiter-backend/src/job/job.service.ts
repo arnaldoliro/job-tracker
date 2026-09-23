@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -10,6 +11,7 @@ import {
   type DiscoverResult,
   type DismissJobInput,
   type Job,
+  type JobSearchResult,
   type SaveJobInput,
   type SavedJob,
   type UndismissJobInput,
@@ -21,6 +23,8 @@ import { DiscoveryService } from './discovery/discovery.service';
 
 @Injectable()
 export class JobService {
+  private readonly logger = new Logger(JobService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly discoveryService: DiscoveryService,
@@ -29,8 +33,9 @@ export class JobService {
   /**
    * Descoberta: vagas reais dos portais, ordenadas por aderência ao currículo.
    *
-   * Como a busca, não toca o banco para escrever — só lê o que já é seu, para
-   * não reoferecer o que você já resolveu.
+   * Lê o que já é seu para não reoferecer o que você resolveu, e registra o
+   * lote devolvido em `DiscoveredJob` — a descoberta é sem estado, então sem
+   * essa escrita não existe resposta para "quantas vagas recebi".
    */
   async discover(params: {
     profileId: string;
@@ -53,7 +58,7 @@ export class JobService {
     const resume = resumeSchema.safeParse(profile.resume);
     const preferences = jobPreferencesSchema.safeParse(profile.jobPreferences);
 
-    return this.discoveryService.discover({
+    const result = await this.discoveryService.discover({
       q: params.q,
       expanded: params.expanded,
       skills: resume.success ? resume.data.skills : [],
@@ -65,6 +70,45 @@ export class JobService {
       excludedUrls: await this.resolvedUrls(params.profileId),
       cursor: params.cursor,
     });
+
+    await this.recordSeen(params.profileId, result.items);
+
+    return result;
+  }
+
+  /**
+   * Registra que estas vagas foram MOSTRADAS a este perfil.
+   *
+   * Só o lote devolvido, não o acervo que o leque produziu: as ~2.000 vagas de
+   * uma rodada são em maioria filtradas e nunca vistas, e contá-las diria que
+   * você recebe duas mil vagas por dia — as mesmas, todo dia.
+   *
+   * `skipDuplicates` faz disso uma instrução só, sem leitura prévia, e a
+   * primeira aparição é a que fica: `firstSeenAt` nunca envelhece para trás.
+   *
+   * NÃO derruba a descoberta se falhar. Métrica é subproduto; perder uma
+   * contagem é aceitável, perder a busca que o usuário pediu não é.
+   */
+  private async recordSeen(
+    profileId: string,
+    items: JobSearchResult[],
+  ): Promise<void> {
+    if (items.length === 0) {
+      return;
+    }
+
+    try {
+      await this.prisma.discoveredJob.createMany({
+        data: toSeenRows(profileId, items),
+        skipDuplicates: true,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `não deu para registrar as vagas mostradas: ${
+          error instanceof Error ? error.message : 'erro desconhecido'
+        }`,
+      );
+    }
   }
 
   /**
@@ -291,4 +335,36 @@ function toJobDto(row: JobModel): Job {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/**
+ * As linhas a gravar, separado do service para poder ser testado sem banco.
+ *
+ * Canoniza a URL aqui, e não confia que a fonte já canonizou: `save()` e
+ * `dismiss()` fazem o mesmo, e a identidade tem que ser a mesma nos três —
+ * senão a mesma vaga vira duas linhas e o denominador infla para sempre, sem
+ * erro nenhum. Hoje todas as fontes canonizam na origem; esta chamada é o que
+ * impede que a próxima esqueça.
+ */
+export function toSeenRows(
+  profileId: string,
+  items: JobSearchResult[],
+): { profileId: string; url: string; source: string }[] {
+  const seen = new Set<string>();
+  const rows: { profileId: string; url: string; source: string }[] = [];
+
+  for (const job of items) {
+    const url = canonicalJobUrl(job.url) ?? job.url;
+
+    // Duas URLs diferentes podem canonizar para a mesma; `createMany` recusaria
+    // o lote inteiro por chave duplicada dentro do próprio insert.
+    if (seen.has(url)) {
+      continue;
+    }
+
+    seen.add(url);
+    rows.push({ profileId, url, source: job.source });
+  }
+
+  return rows;
 }
