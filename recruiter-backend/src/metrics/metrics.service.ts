@@ -3,6 +3,7 @@ import type { ApplicationFacts, Metrics } from '@recruit/shared';
 import { active } from '../application/active';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildFunnel } from './funnel';
+import { buildDailySeries, buildSourceYield, SERIES_DAYS } from './series';
 
 /**
  * As métricas do painel.
@@ -23,7 +24,7 @@ export class MetricsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async forProfile(profileId: string): Promise<Metrics> {
-    const [rows, excluded, jobsSeen, jobsSaved, jobsDismissed, emails] =
+    const [rows, excluded, seen, saved, jobsDismissed, emails] =
       await Promise.all([
         // `Application` é a RAIZ da consulta, e isso não é estilo.
         //
@@ -41,19 +42,28 @@ export class MetricsService {
           select: {
             id: true,
             status: true,
-            job: { select: { source: true } },
+            job: { select: { source: true, url: true } },
             statusEvents: { select: { toStatus: true } },
           },
         }),
         this.prisma.application.count({
           where: { profileId, deletedAt: { not: null } },
         }),
-        this.prisma.discoveredJob.count({ where: { profileId } }),
-        this.prisma.savedJob.count({ where: { profileId } }),
+        // URL e fonte, não só a contagem: é o que permite cruzar o que foi
+        // MOSTRADO com o que você salvou. Cresce ~2.000 linhas por ano, então
+        // carregar tudo é barato; se um dia não for, vira agregação em SQL.
+        this.prisma.discoveredJob.findMany({
+          where: { profileId },
+          select: { url: true, source: true },
+        }),
+        this.prisma.savedJob.findMany({
+          where: { profileId },
+          select: { job: { select: { url: true } } },
+        }),
         this.prisma.dismissedJob.count({ where: { profileId } }),
         this.prisma.emailMessage.findMany({
           where: { profileId },
-          select: { applicationId: true },
+          select: { applicationId: true, receivedAt: true },
         }),
       ]);
 
@@ -69,13 +79,22 @@ export class MetricsService {
       drafts: rows.filter((row) => row.status === 'rascunho').length,
       active: rows.length,
       answered: facts.filter(answered).length,
-      jobsSeen,
-      jobsSaved,
+      jobsSeen: seen.length,
+      jobsSaved: saved.length,
       jobsDismissed,
       emailsReceived: emails.length,
       emailsLinked: emails.filter((email) => email.applicationId !== null)
         .length,
       bySource: countBySource(rows),
+      sourceYield: buildSourceYield(
+        seen,
+        urls(saved.map((row) => row.job.url)),
+        urls(rows.map((row) => row.job.url)),
+      ),
+      emailsByDay: buildDailySeries(
+        emails.map((email) => email.receivedAt),
+        SERIES_DAYS,
+      ),
       excluded,
       minimumForRates: MIN_FOR_RATES,
     };
@@ -113,4 +132,9 @@ function countBySource(
   return [...tally.entries()]
     .map(([source, count]) => ({ source, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+/** `Job.url` é anulável — vaga criada à mão pode não ter link. */
+function urls(values: (string | null)[]): string[] {
+  return values.filter((value): value is string => value !== null);
 }

@@ -63,6 +63,34 @@ export const sourceCountSchema = z.object({
   count: z.number().int().min(0),
 });
 
+/**
+ * O que cada fonte rende, e não só quanto ela despeja.
+ *
+ * `seen` é o denominador que só passou a existir com a `DiscoveredJob`: antes
+ * dava para saber quantas vagas você salvou, nunca DE QUANTAS. É a conta que
+ * muda decisão — uma fonte que mostra 200 e rende 1 não vale o ruído.
+ *
+ * `saved` e `applied` contam apenas vagas que estão em `seen`. Sem esse
+ * recorte, uma vaga salva antes desta tabela existir entraria no numerador e
+ * nunca no denominador, e a taxa passaria de 100% sem nada acusar.
+ */
+export const sourceYieldSchema = z.object({
+  source: z.string(),
+  seen: z.number().int().min(0),
+  saved: z.number().int().min(0),
+  applied: z.number().int().min(0),
+});
+
+export type SourceYield = z.infer<typeof sourceYieldSchema>;
+
+/** Um dia da série de emails. `date` é `AAAA-MM-DD`, sem hora. */
+export const dayCountSchema = z.object({
+  date: z.string(),
+  count: z.number().int().min(0),
+});
+
+export type DayCount = z.infer<typeof dayCountSchema>;
+
 export const metricsSchema = z.object({
   funnel: z.array(funnelStepSchema),
 
@@ -85,6 +113,17 @@ export const metricsSchema = z.object({
   emailsLinked: z.number().int().min(0),
 
   bySource: z.array(sourceCountSchema),
+
+  /** Aproveitamento por fonte. Vazio até a descoberta registrar alguma coisa. */
+  sourceYield: z.array(sourceYieldSchema),
+
+  /**
+   * Emails por dia, incluindo os dias sem nenhum.
+   *
+   * Dia vazio precisa vir como zero: uma série que pula dias desenha uma linha
+   * que sobe onde não houve nada, e o gráfico mente sobre o ritmo.
+   */
+  emailsByDay: z.array(dayCountSchema),
 
   /**
    * Candidaturas apagadas, que NÃO entram em número nenhum desta tela (§3).
