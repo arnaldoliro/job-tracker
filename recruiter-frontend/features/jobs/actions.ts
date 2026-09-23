@@ -1,13 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { DiscoverResult, JobSearchResult } from "@recruit/shared";
+import type {
+  FillReport, DiscoverResult, JobSearchResult } from "@recruit/shared";
 import { createApplication } from "@/features/applications/api";
 import {
   ApiError,
   discoverJobs,
   dismissJob,
   extractJob,
+  fillJobForm,
   saveJob,
   undismissJob,
   unsaveJob,
@@ -161,6 +163,34 @@ export async function discoverAction(params: {
     return {
       status: "error",
       message: "Não consegui buscar vagas nos portais agora.",
+    };
+  }
+}
+
+export type FillState =
+  | { status: "idle" }
+  | { status: "success"; report: FillReport }
+  | { status: "error"; message: string };
+
+/**
+ * Abre o navegador e preenche o formulário da vaga.
+ *
+ * Não revalida rota nenhuma: nada muda no banco. O efeito é uma janela de
+ * navegador aberta na sua máquina, esperando você revisar e enviar.
+ */
+export async function fillFormAction(
+  profileId: string,
+  url: string,
+): Promise<FillState> {
+  try {
+    return { status: "success", report: await fillJobForm(profileId, url) };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof ApiError
+          ? error.message
+          : "Não consegui abrir o navegador.",
     };
   }
 }

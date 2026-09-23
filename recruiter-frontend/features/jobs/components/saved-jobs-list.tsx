@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { IconExternalLink, IconTrash } from "@/components/icons";
-import { applyToJobAction, unsaveJobAction } from "@/features/jobs/actions";
+import {
+  applyToJobAction,
+  fillFormAction,
+  unsaveJobAction,
+  type FillState,
+} from "@/features/jobs/actions";
 import { JobsTabs } from "@/features/jobs/components/jobs-tabs";
 import {
   JobTags,
@@ -59,6 +64,7 @@ function SavedCard({
 }) {
   const { job, application } = item;
   const [error, setError] = useState<string | null>(null);
+  const [fill, setFill] = useState<FillState>({ status: "idle" });
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const salary = formatSalary(job);
@@ -105,6 +111,30 @@ function SavedCard({
         </span>
       )}
 
+      {fill.status === "success" && (
+        <div className="flex flex-col gap-1 rounded-lg border border-zinc-200 p-3 text-xs dark:border-zinc-800">
+          <span className="font-medium">
+            Preenchido no navegador — revise e envie você.
+          </span>
+          <span className="text-zinc-500 dark:text-zinc-400">
+            {fill.report.filled.length > 0
+              ? `Preenchi: ${fill.report.filled.map((f) => f.what).join(", ")}.`
+              : "Não reconheci nenhum campo neste formulário."}
+          </span>
+          {fill.report.skipped.length > 0 && (
+            <span className="text-zinc-500 dark:text-zinc-400">
+              Ficaram com você: {fill.report.skipped.join(", ")}.
+            </span>
+          )}
+        </div>
+      )}
+
+      {fill.status === "error" && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {fill.message}
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {error}
@@ -129,6 +159,22 @@ function SavedCard({
             <IconExternalLink />
             Ver no portal
           </a>
+        )}
+
+        {portalUrl && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                setError(null);
+                setFill(await fillFormAction(profileId, portalUrl));
+              })
+            }
+            className="cursor-pointer rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            {pending ? "Abrindo…" : "Preencher formulário"}
+          </button>
         )}
 
         {/* A vaga não sai da lista ao ser aplicada: o botão é que muda. */}

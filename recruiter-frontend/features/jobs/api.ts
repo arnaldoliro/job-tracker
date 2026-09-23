@@ -1,6 +1,7 @@
 import "server-only";
 import {
   discoverResultSchema,
+  fillReportSchema,
   jobSchema,
   jobSearchResultSchema,
   savedJobListSchema,
@@ -8,6 +9,7 @@ import {
 } from "@recruit/shared";
 import type {
   DiscoverResult,
+  FillReport,
   Job,
   JobSearchResult,
   SavedJob,
@@ -140,6 +142,24 @@ export async function getJob(id: string): Promise<Job> {
 export async function extractJob(url: string): Promise<JobSearchResult> {
   return jobSearchResultSchema.parse(
     await request("/jobs/extract", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
+  );
+}
+
+/**
+ * Abre o formulário da vaga num navegador e preenche o que já é seu.
+ *
+ * NÃO envia. O §5 é categórico, e o `submitted: false` do contrato é literal —
+ * o schema nem aceitaria `true`.
+ */
+export async function fillJobForm(
+  profileId: string,
+  url: string,
+): Promise<FillReport> {
+  return fillReportSchema.parse(
+    await request(`/form-fill?profileId=${encodeURIComponent(profileId)}`, {
       method: "POST",
       body: JSON.stringify({ url }),
     }),
