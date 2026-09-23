@@ -144,7 +144,7 @@ describe('LinkedInAlertsSource', () => {
         receivedAt: new Date('2026-09-09T10:00:00Z'),
         bodyText: corpo([
           'Backend Júnior — Go',
-          'Jungle Gaming',
+          'Selva Games',
           'Brasil',
           '3001',
         ]),
@@ -154,7 +154,7 @@ describe('LinkedInAlertsSource', () => {
         receivedAt: new Date('2026-09-18T10:00:00Z'),
         bodyText: corpo([
           'Backend Júnior — Go',
-          'Jungle Gaming',
+          'Selva Games',
           'Brasil',
           '3002',
         ]),
@@ -174,8 +174,8 @@ describe('LinkedInAlertsSource', () => {
         fromAddress: ALERTA,
         receivedAt: new Date('2026-09-10T10:00:00Z'),
         bodyText: corpo(
-          ['Desenvolvedor Júnior', 'Jobbol', 'Salvador, BA', '3003'],
-          ['Desenvolvedor Júnior', 'Jobbol', 'São Paulo, SP', '3004'],
+          ['Desenvolvedor Júnior', 'Vagalume', 'Salvador, BA', '3003'],
+          ['Desenvolvedor Júnior', 'Vagalume', 'São Paulo, SP', '3004'],
         ),
       },
     ]).fetch();

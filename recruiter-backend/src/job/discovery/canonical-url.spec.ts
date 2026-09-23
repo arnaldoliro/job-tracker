@@ -8,7 +8,7 @@ import { canonicalJobUrl } from './canonical-url';
  * que não some quando você dispensa.
  */
 
-const ID = '4469559238';
+const ID = '1234567890';
 const ESPERADO = `https://www.linkedin.com/jobs/view/${ID}`;
 
 describe('canonicalJobUrl · LinkedIn', () => {
@@ -26,7 +26,7 @@ describe('canonicalJobUrl · LinkedIn', () => {
   it('descarta os parâmetros de rastreio', () => {
     // Estes não são só ruído: `midToken`, `otpToken` e `eid` identificam a
     // CONTA de quem recebeu o email. Não podem chegar ao banco nem ao log.
-    const comRastreio = `https://www.linkedin.com/comm/jobs/view/${ID}/?trackingId=abc%3D%3D&refId=def&midToken=AQG&midSig=2tO&trk=eml-x&trkEmail=eml-y&eid=k6a-mu-mi&otpToken=NWRhNDE4`;
+    const comRastreio = `https://www.linkedin.com/comm/jobs/view/${ID}/?trackingId=AAA%3D%3D&refId=BBB&midToken=CCC&midSig=DDD&trk=eml-x&trkEmail=eml-y&eid=eee-fff-gg&otpToken=HHHH`;
 
     const saida = canonicalJobUrl(comRastreio);
 

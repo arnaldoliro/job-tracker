@@ -236,8 +236,8 @@ describe('classify', () => {
    * por remetente não separa os dois; só o texto separa.
    */
   it.each([
-    'Arnaldo, candidate-se agora à vaga de Desenvolvedor Node.js na Jobbol',
-    'A empresa Mendelics está contratando para um cargo de Remota',
+    'Fulano, candidate-se agora à vaga de Desenvolvedor Node.js na Vagalume',
+    'A empresa Genoma Lab está contratando para um cargo de Remota',
   ])('convite para se candidatar é alerta, não candidatura: %s', (subject) => {
     expect(classify(subject, null)).toBe('alerta');
   });
@@ -295,15 +295,15 @@ describe('companyGuess', () => {
    * criasse assim mesmo. A ingestão funcionava e não servia para nada.
    */
   it.each([
-    ['Arnaldo, sua candidatura foi enviada à DS3 Digital', 'DS3 Digital'],
+    ['Fulano, sua candidatura foi enviada à KX9 Digital', 'KX9 Digital'],
     [
-      'Arnaldo, sua candidatura foi enviada à Tata Consultancy Services',
-      'Tata Consultancy Services',
+      'Fulano, sua candidatura foi enviada à Vertex Consultoria Global',
+      'Vertex Consultoria Global',
     ],
-    ['Arnaldo, sua candidatura foi enviada à Jobgether', 'Jobgether'],
+    ['Fulano, sua candidatura foi enviada à Trabalhai', 'Trabalhai'],
     [
-      'Arnaldo, sua candidatura foi enviada à Dimensa Tecnologia',
-      'Dimensa Tecnologia',
+      'Fulano, sua candidatura foi enviada à Cortex Tecnologia',
+      'Cortex Tecnologia',
     ],
   ])('lê a empresa do aviso do LinkedIn: %s', (subject, empresa) => {
     expect(classify(subject, null)).toBe('confirmacao');
