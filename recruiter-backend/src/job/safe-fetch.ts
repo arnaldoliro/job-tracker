@@ -202,8 +202,13 @@ export function isBlockedAddress(address: string): boolean {
   );
 }
 
-/** Valida esquema, porta e TODOS os endereços para os quais o host resolve. */
-async function assertReachable(url: URL): Promise<void> {
+/**
+ * Valida esquema, porta e TODOS os endereços para os quais o host resolve.
+ *
+ * Exportada porque o preenchimento de formulário também navega para URL que
+ * não controlamos — e lá o risco é maior: o navegador tem sessão logada.
+ */
+export async function assertReachable(url: URL): Promise<void> {
   if (!ALLOWED_PROTOCOLS.has(url.protocol)) {
     throw new FetchError('Use um link http ou https.');
   }

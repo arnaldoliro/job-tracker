@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   BadRequestException,
@@ -12,6 +13,7 @@ import {
   type Locator,
   type Page,
 } from 'playwright-core';
+import { assertReachable, FetchError } from '../job/safe-fetch';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildFieldPlan, NEVER_FILL, type PlannedField } from './field-plan';
 
@@ -34,8 +36,20 @@ import { buildFieldPlan, NEVER_FILL, type PlannedField } from './field-plan';
  * conta, e sem sessão guardada cada rodada recomeçaria no login.
  */
 
-/** Onde fica o perfil do Chrome. Tem sessão logada: está no .gitignore (§5). */
-const PROFILE_DIR = join(process.cwd(), '..', '.browser-profile');
+/**
+ * Onde fica o perfil do Chrome — FORA da pasta do projeto.
+ *
+ * Ele guarda cookies de sessão logada dos ATS. Estar no `.gitignore` impedia
+ * o commit, mas não impedia o resto: zipar o projeto, copiar para outra
+ * máquina, mandar para alguém depurar, sincronizar a pasta num drive. Qualquer
+ * um desses levaria as sessões junto. No diretório de dados do usuário, o
+ * projeto pode ir para onde for sem arrastar credencial.
+ */
+const PROFILE_DIR = join(
+  process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'),
+  'job-tracker',
+  'browser-profile',
+);
 
 const NAV_TIMEOUT_MS = 45_000;
 const FIELD_TIMEOUT_MS = 2_500;
@@ -77,6 +91,25 @@ export class FormFillService {
       throw new BadRequestException({
         error: 'Bad Request',
         message: 'Link inválido.',
+      });
+    }
+
+    // O navegador aqui tem SESSÃO LOGADA nos ATS, então navegar para qualquer
+    // lugar é mais perigoso que um fetch comum. As URLs vêm de portais de
+    // terceiros; uma apontando para 127.0.0.1 ou para a rede interna abriria,
+    // com seus cookies, o painel do roteador ou um serviço local.
+    //
+    // Mesma regra do `safe-fetch`: loopback, rede privada, link-local e
+    // metadados de nuvem, conferindo TODO endereço que o host resolve.
+    try {
+      await assertReachable(new URL(url));
+    } catch (error) {
+      throw new BadRequestException({
+        error: 'Bad Request',
+        message:
+          error instanceof FetchError
+            ? error.message
+            : 'Endereço não permitido.',
       });
     }
 
