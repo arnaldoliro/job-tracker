@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState, useTransition } from "react";
 import { ageFromBirthDate, emptyResume } from "@recruit/shared";
 import type {
@@ -101,7 +102,15 @@ export function ResumeForm({ profile }: { profile: ProfileDetail }) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-16">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-lg font-semibold tracking-tight">Currículo</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-lg font-semibold tracking-tight">Currículo</h1>
+          <Link
+            href="/curriculo/imprimir"
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Ver e salvar PDF
+          </Link>
+        </div>
         <button
           type="button"
           onClick={save}

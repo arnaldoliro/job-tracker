@@ -26,7 +26,11 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <div data-shell className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+      {/* Fora do PDF: o cabeçalho do app não pertence a um currículo. */}
+      <header
+        data-print-hide
+        className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800"
+      >
         <div className="flex items-center gap-3">
           <span
             aria-hidden
@@ -52,11 +56,14 @@ export function AppShell({
         </button>
       </header>
 
-      <div className="border-b border-zinc-200 px-6 dark:border-zinc-800">
+      <div
+        data-print-hide
+        className="border-b border-zinc-200 px-6 dark:border-zinc-800"
+      >
         <MainNav />
       </div>
 
-      <main className="flex flex-1 flex-col p-6">
+      <main className="flex flex-1 flex-col p-6 print:p-0">
         {children}
       </main>
     </div>
