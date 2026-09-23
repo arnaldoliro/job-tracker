@@ -1,11 +1,14 @@
 import type { Metrics } from "@recruit/shared";
+import { AreaChart } from "./area-chart";
 import { FunnelChart } from "./funnel-chart";
+import { SourceYieldChart } from "./source-yield";
 
 /**
  * O painel.
  *
- * Componente de servidor, sem `"use client"`: a tela só lê, e nada aqui é
- * interativo.
+ * Servidor, e os gráficos são os únicos clientes: só eles precisam de hover.
+ * A fronteira fica neles e não aqui para o JSON das métricas não atravessar
+ * para o bundle — a página continua sendo HTML pronto.
  *
  * O trabalho de verdade desta tela não são os números — é explicar os zeros.
  * Com quatro candidaturas todas em `aplicado`, o funil é `4 → 0 → 0 → 0` e
@@ -65,17 +68,19 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
           </section>
 
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile label="Ativas" value={metrics.active} />
+            <Tile label="Ativas" value={metrics.active} delay={0} />
             <Tile
               label="Responderam"
               value={metrics.answered}
               hint="saíram de aplicado"
+              delay={60}
             />
-            <Tile label="Rejeitadas" value={metrics.rejected} />
+            <Tile label="Rejeitadas" value={metrics.rejected} delay={120} />
             <Tile
               label="Em rascunho"
               value={metrics.drafts}
               hint="ainda não enviadas"
+              delay={180}
             />
           </section>
 
@@ -91,16 +96,51 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
                     ? "a contagem começa na primeira busca"
                     : "mostradas na descoberta"
                 }
+                delay={0}
               />
-              <Tile label="Salvas" value={metrics.jobsSaved} />
-              <Tile label="Dispensadas" value={metrics.jobsDismissed} />
+              <Tile label="Salvas" value={metrics.jobsSaved} delay={60} />
+              <Tile
+                label="Dispensadas"
+                value={metrics.jobsDismissed}
+                delay={120}
+              />
               <Tile
                 label="Emails"
                 value={metrics.emailsReceived}
                 hint={`${metrics.emailsLinked} vinculados`}
+                delay={180}
               />
             </div>
           </section>
+
+          {metrics.sourceYield.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h2 className="text-sm font-medium">
+                  O que cada fonte rendeu
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  De quantas vagas mostradas você aproveitou alguma. Passe o
+                  mouse para ver a quebra.
+                </p>
+              </div>
+
+              <SourceYieldChart items={metrics.sourceYield} />
+            </section>
+          )}
+
+          {metrics.emailsReceived > 0 && (
+            <section className="flex flex-col gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h2 className="text-sm font-medium">Emails por dia</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  O ritmo com que processo seletivo te procura.
+                </p>
+              </div>
+
+              <AreaChart series={metrics.emailsByDay} />
+            </section>
+          )}
 
           {metrics.bySource.length > 0 && (
             <section className="flex flex-col gap-3">
@@ -121,13 +161,18 @@ function Tile({
   label,
   value,
   hint,
+  delay = 0,
 }: {
   label: string;
   value: number;
   hint?: string;
+  delay?: number;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-800">
+    <div
+      className="metric-tile flex flex-col gap-0.5 rounded-xl border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <span className="text-2xl font-semibold tabular-nums">{value}</span>
       <span className="text-xs text-zinc-600 dark:text-zinc-400">{label}</span>
       {hint && (

@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { FunnelStep } from "@recruit/shared";
 
 /**
@@ -31,12 +34,18 @@ const stageFill: Record<FunnelStep["stage"], string> = {
 };
 
 export function FunnelChart({ steps }: { steps: FunnelStep[] }) {
+  const [hover, setHover] = useState<string | null>(null);
   const entry = steps[0]?.reached ?? 0;
 
   return (
     <ol className="flex flex-col gap-3">
-      {steps.map((step) => (
-        <li key={step.stage} className="flex flex-col gap-1.5">
+      {steps.map((step, index) => (
+        <li
+          key={step.stage}
+          className="flex flex-col gap-1.5"
+          onPointerEnter={() => setHover(step.stage)}
+          onPointerLeave={() => setHover(null)}
+        >
           <div className="flex items-baseline justify-between gap-3 text-sm">
             <span className="capitalize">{step.stage}</span>
             <span className="flex items-baseline gap-2">
@@ -48,18 +57,32 @@ export function FunnelChart({ steps }: { steps: FunnelStep[] }) {
                   {Math.round(step.conversion * 100)}%
                 </span>
               )}
+              {hover === step.stage && entry > 0 && (
+                <span className="text-xs text-zinc-400 tabular-nums dark:text-zinc-500">
+                  {Math.round((step.reached / entry) * 100)}% do topo
+                </span>
+              )}
             </span>
           </div>
 
           <div
             aria-hidden
-            className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"
+            className={`h-2 w-full overflow-hidden rounded-full transition-colors ${
+              hover === step.stage
+                ? "bg-zinc-200 dark:bg-zinc-700"
+                : "bg-zinc-100 dark:bg-zinc-800"
+            }`}
           >
             <div
-              className={`h-full rounded-full ${stageFill[step.stage]}`}
+              className={`metric-bar h-full rounded-full ${stageFill[step.stage]}`}
               // Contagem não nula nunca desaparece: 1 em 200 daria 0,5% e
               // sumiria, parecendo zero.
-              style={{ width: `${width(step.reached, entry)}%` }}
+              style={{
+                width: `${width(step.reached, entry)}%`,
+                // Escada: cada degrau entra depois do anterior, no sentido em
+                // que o funil é lido.
+                animationDelay: `${index * 80}ms`,
+              }}
             />
           </div>
         </li>

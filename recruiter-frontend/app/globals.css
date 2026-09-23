@@ -96,3 +96,71 @@ body {
     }
   }
 }
+
+@layer components {
+  /*
+   * Animações do painel de métricas.
+   *
+   * Todas respeitam `prefers-reduced-motion`: movimento aqui é leitura, não
+   * enfeite — a barra crescendo diz "isto é uma quantidade" —, mas para quem
+   * pediu menos movimento o valor final tem que aparecer direto, não sumir.
+   */
+  .metric-bar {
+    transform-origin: left center;
+    animation: metric-bar-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes metric-bar-in {
+    from {
+      scale: 0 1;
+    }
+  }
+
+  /* A linha se desenha da esquerda para a direita, no sentido do tempo. */
+  .metric-line {
+    stroke-dasharray: var(--metric-line-length);
+    stroke-dashoffset: var(--metric-line-length);
+    animation: metric-line-in 900ms cubic-bezier(0.33, 1, 0.68, 1) both;
+  }
+
+  @keyframes metric-line-in {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .metric-area {
+    animation: metric-area-in 900ms ease-out both;
+  }
+
+  @keyframes metric-area-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .metric-tile {
+    animation: metric-tile-in 360ms ease-out both;
+  }
+
+  @keyframes metric-tile-in {
+    from {
+      opacity: 0;
+      translate: 0 6px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .metric-bar,
+    .metric-line,
+    .metric-area,
+    .metric-tile {
+      animation: none;
+    }
+
+    .metric-line {
+      stroke-dasharray: none;
+      stroke-dashoffset: 0;
+    }
+  }
+}
