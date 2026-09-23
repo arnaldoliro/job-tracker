@@ -4,6 +4,7 @@ export * from './email';
 export * from './job';
 export * from './job-extraction';
 export * from './job-preferences';
+export * from './metrics';
 export * from './profile';
 export * from './resume';
 export * from './status-event';
