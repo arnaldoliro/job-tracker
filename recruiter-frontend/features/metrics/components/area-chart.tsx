@@ -131,7 +131,66 @@ export function AreaChart({ series }: { series: DayCount[] }) {
           </div>
         </div>
       )}
+
+      <DataTable series={series} />
     </div>
+  );
+}
+
+/**
+ * Os mesmos números, alcançáveis sem mouse.
+ *
+ * Nas barras do painel todo valor já está impresso ao lado; aqui não cabe, e
+ * sem esta tabela os 60 valores existem SÓ no hover — quem usa leitor de tela
+ * ou navega por teclado não chega a nenhum deles. O `aria-label` do gráfico
+ * dá o formato e o pico, não a série.
+ *
+ * Fechada por padrão para não competir com o gráfico, e mostrando apenas os
+ * dias com email: sessenta linhas em que quarenta dizem zero escondem o que
+ * importa em vez de revelar.
+ */
+function DataTable({ series }: { series: DayCount[] }) {
+  const withMail = series.filter((day) => day.count > 0);
+
+  if (withMail.length === 0) {
+    return null;
+  }
+
+  return (
+    <details className="mt-2">
+      <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
+        Ver os números
+      </summary>
+
+      <table className="mt-2 w-full text-xs">
+        <caption className="sr-only">
+          Emails recebidos por dia, apenas os dias com pelo menos um.
+        </caption>
+        <thead>
+          <tr className="text-left text-zinc-500 dark:text-zinc-400">
+            <th scope="col" className="py-1 font-normal">
+              Dia
+            </th>
+            <th scope="col" className="py-1 text-right font-normal">
+              Emails
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {withMail.map((day) => (
+            <tr
+              key={day.date}
+              className="border-t border-zinc-100 dark:border-zinc-800"
+            >
+              <th scope="row" className="py-1 font-normal">
+                {longDate(day.date)}
+              </th>
+              <td className="py-1 text-right tabular-nums">{day.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
   );
 }
 
