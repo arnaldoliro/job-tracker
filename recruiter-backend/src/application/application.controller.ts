@@ -15,6 +15,7 @@ import {
   updateApplicationSchema,
 } from '@recruit/shared';
 import type {
+  Resume,
   Application,
   CreateApplicationInput,
   UpdateApplicationInput,
@@ -54,6 +55,12 @@ export class ApplicationController {
     input: UpdateApplicationInput,
   ): Promise<Application> {
     return this.applicationService.update(id, input);
+  }
+
+  /** O currículo como foi enviado nesta candidatura. */
+  @Get(':id/resume')
+  resume(@Param('id') id: string): Promise<Resume> {
+    return this.applicationService.resumeOf(id);
   }
 
   @Delete(':id')
