@@ -32,11 +32,14 @@ export const envSchema = z.object({
   API_HOST: z.string().min(1).default('127.0.0.1'),
   WEB_ORIGIN: z.url().default('http://localhost:3000'),
 
-  // Infraestrutura: obrigatórias, o worker não funciona sem elas.
+  // Infraestrutura: obrigatória, o backend não funciona sem ela.
+  //
+  // Sem `REDIS_URL`: ela era obrigatória no boot e nenhum código a lia. O
+  // Redis estava previsto para filas BullMQ que nunca foram necessárias — um
+  // job, uma caixa de email, a cada 15 minutos cabe no `@nestjs/schedule`.
   DATABASE_URL: z.url(),
-  REDIS_URL: z.url(),
 
-  // Opcionais enquanto as features de IA e email não existem.
+  // Opcionais: sem elas, a feature correspondente fica desligada.
   ANTHROPIC_API_KEY: optionalString,
   IMAP_HOST: optionalString,
   IMAP_PORT: z.coerce.number().int().positive().default(993),
