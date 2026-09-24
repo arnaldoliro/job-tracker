@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -171,6 +172,10 @@ export class ApplicationService {
           fromStatus: null,
           toStatus: status,
           source: 'manual',
+          // Candidatura registrada com data de envio — a que vem do email de
+          // confirmação, por exemplo — aconteceu NAQUELA data, não agora. É
+          // exatamente o caso em que registro e fato mais se afastam.
+          occurredAt: application.appliedAt ?? undefined,
         },
       });
 
@@ -289,6 +294,47 @@ export class ApplicationService {
     }
 
     return resume;
+  }
+
+  /**
+   * Corrige QUANDO uma transição aconteceu.
+   *
+   * O clique na lista registra "agora" — e tem que continuar sendo um clique
+   * só, que é o que mantém a troca de status abaixo dos 30 segundos do §1.
+   * Pedir data ali seria atrito na ação mais frequente do dia. Então a data
+   * certa vem depois, quando você lembra que a entrevista foi marcada na
+   * segunda e não na quarta em que registrou.
+   *
+   * Só `occurredAt` muda. `createdAt` continua dizendo quando o evento foi
+   * gravado, e o status da candidatura não é tocado: corrigir a data de um
+   * fato não altera o fato.
+   */
+  async setEventDate(
+    applicationId: string,
+    eventId: string,
+    occurredAt: Date,
+  ): Promise<void> {
+    if (occurredAt.getTime() > Date.now()) {
+      throw new BadRequestException({
+        error: 'Bad Request',
+        message: 'A data não pode estar no futuro.',
+      });
+    }
+
+    // `updateMany` com a candidatura no filtro: o evento só é alcançável
+    // através de uma candidatura ATIVA deste id. Um id de evento de outra
+    // candidatura, ou de uma apagada, não encontra nada.
+    const result = await this.prisma.statusEvent.updateMany({
+      where: { id: eventId, application: { id: applicationId, ...active } },
+      data: { occurredAt },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Evento não encontrado',
+      });
+    }
   }
 
   async softDelete(id: string): Promise<void> {

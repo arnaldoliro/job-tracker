@@ -12,12 +12,14 @@ import {
 } from '@nestjs/common';
 import {
   createApplicationSchema,
+  setEventDateSchema,
   updateApplicationSchema,
 } from '@recruit/shared';
 import type {
-  Resume,
   Application,
   CreateApplicationInput,
+  Resume,
+  SetEventDateInput,
   UpdateApplicationInput,
 } from '@recruit/shared';
 import { ProfileExistsPipe } from '../common/pipes/profile-exists.pipe';
@@ -55,6 +57,21 @@ export class ApplicationController {
     input: UpdateApplicationInput,
   ): Promise<Application> {
     return this.applicationService.update(id, input);
+  }
+
+  /** Corrige quando uma transição de status aconteceu. */
+  @Patch(':id/events/:eventId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  setEventDate(
+    @Param('id') id: string,
+    @Param('eventId') eventId: string,
+    @Body(new ZodValidationPipe(setEventDateSchema)) input: SetEventDateInput,
+  ): Promise<void> {
+    return this.applicationService.setEventDate(
+      id,
+      eventId,
+      new Date(input.occurredAt),
+    );
   }
 
   /** O currículo como foi enviado nesta candidatura. */

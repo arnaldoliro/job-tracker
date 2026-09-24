@@ -12,6 +12,7 @@ import {
   createApplication,
   getTimeline,
   deleteApplication,
+  setEventDate,
   updateApplication,
 } from "@/features/applications/api";
 import type {
@@ -186,5 +187,36 @@ export async function loadTimelineAction(id: string): Promise<TimelineState> {
     }
 
     return { status: "error", message: "Não consegui carregar o histórico." };
+  }
+}
+
+/**
+ * Corrige a data de uma transição.
+ *
+ * Recebe o dia como `AAAA-MM-DD` — é o que o `<input type="date">` entrega — e
+ * grava ao meio-dia UTC: meia-noite num fuso negativo cairia no dia anterior,
+ * e a entrevista de segunda apareceria como domingo.
+ */
+export async function setEventDateAction(
+  applicationId: string,
+  eventId: string,
+  day: string,
+): Promise<{ status: "success" } | { status: "error"; message: string }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return { status: "error", message: "Data inválida." };
+  }
+
+  try {
+    await setEventDate(applicationId, eventId, `${day}T12:00:00.000Z`);
+    revalidatePath("/");
+    revalidatePath("/metricas");
+
+    return { status: "success" };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof ApiError ? error.message : "Não consegui salvar a data.",
+    };
   }
 }

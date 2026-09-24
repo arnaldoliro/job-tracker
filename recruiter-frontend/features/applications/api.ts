@@ -92,3 +92,15 @@ export async function deleteApplication(id: string): Promise<void> {
 export async function getTimeline(id: string): Promise<TimelineEntry[]> {
   return timelineSchema.parse(await request(`/applications/${id}/timeline`));
 }
+
+/** Corrige quando uma transição aconteceu. O status não muda. */
+export async function setEventDate(
+  applicationId: string,
+  eventId: string,
+  occurredAt: string,
+): Promise<void> {
+  await request(`/applications/${applicationId}/events/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ occurredAt }),
+  });
+}

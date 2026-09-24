@@ -260,12 +260,25 @@ model StatusEvent {
   source     StatusEventSource  @default(manual)
   note       String?
 
+  /// Quando a mudança ACONTECEU — não quando foi registrada.
+  ///
+  /// São perguntas diferentes: a entrevista foi marcada na segunda, você
+  /// registrou na quarta. Com só `createdAt`, "tempo até a primeira resposta"
+  /// media o seu hábito de registro, não a velocidade da empresa — das
+  /// transições reais do banco, quatro estavam a segundos uma da outra.
+  ///
+  /// O padrão é o momento do registro, e a data pode ser corrigida depois
+  /// pela linha do tempo. Eventos anteriores a esta coluna herdaram o
+  /// `createdAt`, que é o melhor que se sabia deles.
+  occurredAt DateTime @default(now())
+
+  /// Quando o evento foi gravado. Não muda, nem quando `occurredAt` é corrigido.
   createdAt DateTime @default(now())
 
   application  Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   emailMessage EmailMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
 
-  @@index([applicationId, createdAt])
+  @@index([applicationId, occurredAt])
 }
 
 /// Snapshot imutável do CV enviado em uma candidatura. Guardar o conteúdo (e

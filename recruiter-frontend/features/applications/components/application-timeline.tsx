@@ -2,7 +2,10 @@
 
 import { useEffect, useState, useTransition } from "react";
 import type { TimelineEntry } from "@recruit/shared";
-import { loadTimelineAction } from "@/features/applications/actions";
+import {
+  loadTimelineAction,
+  setEventDateAction,
+} from "@/features/applications/actions";
 import { StatusBadge } from "@/features/applications/components/status-badge";
 
 /**
@@ -61,9 +64,30 @@ export function ApplicationTimeline({ applicationId }: { applicationId: string }
         <ol className="flex flex-col gap-3">
           {entries.map((entry) => (
             <li key={`${entry.kind}-${entry.id}`} className="flex flex-col gap-1">
-              <time className="text-xs text-zinc-400 dark:text-zinc-500">
-                {formatDate(entry.at)}
-              </time>
+              {entry.kind === "status" ? (
+                <EventDate
+                  applicationId={applicationId}
+                  eventId={entry.id}
+                  at={entry.at}
+                  onSaved={(at) =>
+                    // Reordena na hora: corrigir a data pode mover o evento
+                    // para antes de outro, e a linha do tempo é cronológica.
+                    setEntries((current) =>
+                      (current ?? [])
+                        .map((item) =>
+                          item.kind === "status" && item.id === entry.id
+                            ? { ...item, at }
+                            : item,
+                        )
+                        .sort((a, b) => a.at.localeCompare(b.at)),
+                    )
+                  }
+                />
+              ) : (
+                <time className="text-xs text-zinc-400 dark:text-zinc-500">
+                  {formatDate(entry.at)}
+                </time>
+              )}
 
               {entry.kind === "status" ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -88,6 +112,106 @@ export function ApplicationTimeline({ applicationId }: { applicationId: string }
         </ol>
       )}
     </section>
+  );
+}
+
+/**
+ * A data de uma transição, com correção.
+ *
+ * Trocar o status na lista registra "agora" — e tem que continuar sendo um
+ * clique, senão a ação mais frequente do dia passa dos 30 segundos do §1. A
+ * data certa vem aqui, quando você lembra que a entrevista foi marcada na
+ * segunda e não na quarta em que registrou. É ela que alimenta "tempo até a
+ * primeira resposta" no painel.
+ *
+ * Email não tem este controle: a data dele vem do servidor de email, e não é
+ * sua para corrigir.
+ */
+function EventDate({
+  applicationId,
+  eventId,
+  at,
+  onSaved,
+}: {
+  applicationId: string;
+  eventId: string;
+  at: string;
+  onSaved: (at: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [day, setDay] = useState(at.slice(0, 10));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  // O dia de hoje no fuso de quem está usando: `max` impede escolher o futuro
+  // já no seletor, e o backend recusa do mesmo jeito se passar.
+  const today = new Date().toLocaleDateString("en-CA");
+
+  if (!editing) {
+    return (
+      <span className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+        <time>{formatDate(at)}</time>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="cursor-pointer underline underline-offset-2 hover:text-zinc-600 dark:hover:text-zinc-300"
+        >
+          corrigir data
+        </button>
+      </span>
+    );
+  }
+
+  const save = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await setEventDateAction(applicationId, eventId, day);
+
+      if (result.status === "error") {
+        setError(result.message);
+
+        return;
+      }
+
+      onSaved(`${day}T12:00:00.000Z`);
+      setEditing(false);
+    });
+  };
+
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-xs">
+      <input
+        type="date"
+        value={day}
+        max={today}
+        onChange={(event) => setDay(event.target.value)}
+        aria-label="Quando aconteceu"
+        className="rounded border border-zinc-300 bg-transparent px-1.5 py-0.5 dark:border-zinc-700"
+      />
+      <button
+        type="button"
+        disabled={pending || day === ""}
+        onClick={save}
+        className="cursor-pointer rounded bg-zinc-900 px-2 py-0.5 font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+      >
+        {pending ? "Salvando…" : "Salvar"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setDay(at.slice(0, 10));
+          setEditing(false);
+        }}
+        className="cursor-pointer text-zinc-500 underline underline-offset-2"
+      >
+        cancelar
+      </button>
+      {error && (
+        <span role="alert" className="text-red-600 dark:text-red-400">
+          {error}
+        </span>
+      )}
+    </span>
   );
 }
 

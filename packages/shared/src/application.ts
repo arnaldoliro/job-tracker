@@ -114,3 +114,14 @@ export const updateApplicationSchema = z.strictObject({
 });
 
 export type UpdateApplicationInput = z.infer<typeof updateApplicationSchema>;
+
+/**
+ * Corrigir QUANDO uma transição aconteceu.
+ *
+ * Só a data: o status não muda. Corrigir a data de um fato não altera o fato.
+ */
+export const setEventDateSchema = z.strictObject({
+  occurredAt: z.iso.datetime(),
+});
+
+export type SetEventDateInput = z.infer<typeof setEventDateSchema>;

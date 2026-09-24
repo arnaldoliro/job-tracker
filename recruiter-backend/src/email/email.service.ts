@@ -552,7 +552,7 @@ export class EmailService {
     const [events, emails] = await Promise.all([
       this.prisma.statusEvent.findMany({
         where: { applicationId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { occurredAt: 'asc' },
       }),
       this.prisma.emailMessage.findMany({
         where: { applicationId },
@@ -564,7 +564,9 @@ export class EmailService {
       ...events.map((event) => ({
         kind: 'status' as const,
         id: event.id,
-        at: event.createdAt.toISOString(),
+        // Quando ACONTECEU, não quando foi registrado — é o que a linha do
+        // tempo existe para mostrar.
+        at: event.occurredAt.toISOString(),
         fromStatus: event.fromStatus,
         toStatus: event.toStatus,
         source: event.source,
