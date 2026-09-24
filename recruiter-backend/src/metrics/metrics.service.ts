@@ -56,7 +56,7 @@ export class MetricsService {
         // carregar tudo é barato; se um dia não for, vira agregação em SQL.
         this.prisma.discoveredJob.findMany({
           where: { profileId },
-          select: { url: true, source: true },
+          select: { url: true, source: true, firstSeenAt: true },
         }),
         this.prisma.savedJob.findMany({
           where: { profileId },
@@ -96,6 +96,10 @@ export class MetricsService {
       emailsByDay: buildDailySeries(
         emails.map((email) => email.receivedAt),
         SERIES_DAYS,
+      ),
+      jobsSeenByDay: buildDailySeries(
+        seen.map((job) => job.firstSeenAt),
+        measuredDays(seen.map((job) => job.firstSeenAt)),
       ),
       responseTime: responseTime(
         rows.map((row) => ({
@@ -145,4 +149,24 @@ function countBySource(
 /** `Job.url` é anulável — vaga criada à mão pode não ter link. */
 function urls(values: (string | null)[]): string[] {
   return values.filter((value): value is string => value !== null);
+}
+
+/**
+ * Quantos dias a série de vagas cobre: do primeiro registro até hoje.
+ *
+ * A série de emails vai 60 dias para trás porque os emails EXISTEM nesse
+ * período — zero lá é zero. A de vagas não: a descoberta não guardava
+ * histórico antes da `DiscoveredJob`, e os dias anteriores ao primeiro
+ * registro não são "dias sem vaga", são dias sem medição. Desenhá-los como
+ * zero afirmaria algo que ninguém mediu.
+ */
+function measuredDays(dates: Date[]): number {
+  if (dates.length === 0) {
+    return 0;
+  }
+
+  const first = Math.min(...dates.map((date) => date.getTime()));
+  const elapsed = Math.floor((Date.now() - first) / (24 * 60 * 60 * 1000));
+
+  return Math.min(SERIES_DAYS, elapsed + 1);
 }

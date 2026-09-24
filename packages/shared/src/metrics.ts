@@ -134,6 +134,14 @@ export const metricsSchema = z.object({
    * `medianDays` é nulo quando ninguém respondeu ainda — zero afirmaria uma
    * resposta instantânea.
    */
+  /**
+   * Vagas mostradas pela descoberta, por dia de primeira aparição.
+   *
+   * Começa vazia: a descoberta não guardava histórico até a `DiscoveredJob`
+   * existir. A série só cobre do dia em que ela passou a gravar.
+   */
+  jobsSeenByDay: z.array(dayCountSchema),
+
   responseTime: z.object({
     medianDays: z.number().min(0).nullable(),
     sample: z.number().int().min(0),

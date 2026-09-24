@@ -143,7 +143,40 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
                 </p>
               </div>
 
-              <AreaChart series={metrics.emailsByDay} />
+              <AreaChart
+                series={metrics.emailsByDay}
+                unit={{ one: "email", many: "emails" }}
+                title="Emails por dia"
+              />
+            </section>
+          )}
+
+          {metrics.jobsSeen > 0 && (
+            <section className="flex flex-col gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h2 className="text-sm font-medium">Vagas recebidas por dia</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Quantas vagas novas a descoberta te mostrou. A contagem
+                  começou em{" "}
+                  {firstDay(metrics.jobsSeenByDay)} — antes disso a descoberta
+                  não guardava histórico.
+                </p>
+              </div>
+
+              {metrics.jobsSeenByDay.length >= 2 ? (
+                <AreaChart
+                  series={metrics.jobsSeenByDay}
+                  unit={{ one: "vaga", many: "vagas" }}
+                  title="Vagas recebidas por dia"
+                />
+              ) : (
+                // Um dia só não é série: seria um ponto solto, sem linha. O
+                // gráfico aparece quando houver o que ligar.
+                <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                  {metrics.jobsSeen} vagas no primeiro dia de medição. O gráfico
+                  aparece a partir do segundo dia.
+                </p>
+              )}
             </section>
           )}
 
@@ -271,4 +304,23 @@ function SourceBars({ items }: { items: { source: string; count: number }[] }) {
       ))}
     </ol>
   );
+}
+
+/**
+ * O primeiro dia com vaga registrada.
+ *
+ * A tela diz de quando a série começa porque, sem isso, os dias vazios antes
+ * dela pareceriam dias sem vaga — quando na verdade não havia medição.
+ */
+function firstDay(series: { date: string; count: number }[]): string {
+  const first = series.find((day) => day.count > 0);
+
+  if (!first) {
+    return "hoje";
+  }
+
+  return new Date(`${first.date}T12:00:00Z`).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+  });
 }

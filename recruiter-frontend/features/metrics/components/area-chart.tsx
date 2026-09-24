@@ -4,10 +4,10 @@ import { useId, useMemo, useRef, useState } from "react";
 import type { DayCount } from "@recruit/shared";
 
 /**
- * Emails por dia.
+ * Uma contagem por dia, como área.
  *
- * É a única série temporal real do projeto — 52 emails em 41 dias distintos —,
- * e por isso a única que merece linha. As outras métricas são contagem, e
+ * Serve às duas séries temporais que o projeto tem — emails recebidos e vagas
+ * que a descoberta te mostrou. O resto do painel é contagem sem tempo, e
  * contagem se lê melhor em barra.
  *
  * SVG à mão em vez de biblioteca: é um caminho e uma área. Uma dependência de
@@ -23,7 +23,22 @@ const WIDTH = 720;
 const HEIGHT = 180;
 const PADDING = { top: 12, right: 4, bottom: 20, left: 4 };
 
-export function AreaChart({ series }: { series: DayCount[] }) {
+/** Como chamar uma unidade da série: "1 email", "3 vagas". */
+export interface SeriesUnit {
+  one: string;
+  many: string;
+}
+
+export function AreaChart({
+  series,
+  unit,
+  title,
+}: {
+  series: DayCount[];
+  unit: SeriesUnit;
+  /** Vai no `aria-label` e na legenda da tabela, onde o título visual não chega. */
+  title: string;
+}) {
   const gradientId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -48,7 +63,7 @@ export function AreaChart({ series }: { series: DayCount[] }) {
         // Altura fixa e largura fluida: o viewBox faz o resto escalar.
         className="h-44 w-full touch-none"
         role="img"
-        aria-label={`Emails por dia nos últimos ${series.length} dias. Pico de ${max} num único dia.`}
+        aria-label={`${title} nos últimos ${series.length} dias. Pico de ${max} num único dia.`}
         onPointerMove={(event) => {
           const box = event.currentTarget.getBoundingClientRect();
           const ratio = (event.clientX - box.left) / box.width;
@@ -124,7 +139,7 @@ export function AreaChart({ series }: { series: DayCount[] }) {
           style={{ left: `${(activePoint.x / WIDTH) * 100}%` }}
         >
           <div className="font-medium tabular-nums">
-            {active.count} {active.count === 1 ? "email" : "emails"}
+            {active.count} {active.count === 1 ? unit.one : unit.many}
           </div>
           <div className="text-zinc-500 dark:text-zinc-400">
             {longDate(active.date)}
@@ -132,7 +147,7 @@ export function AreaChart({ series }: { series: DayCount[] }) {
         </div>
       )}
 
-      <DataTable series={series} />
+      <DataTable series={series} unit={unit} title={title} />
     </div>
   );
 }
@@ -149,10 +164,18 @@ export function AreaChart({ series }: { series: DayCount[] }) {
  * dias com email: sessenta linhas em que quarenta dizem zero escondem o que
  * importa em vez de revelar.
  */
-function DataTable({ series }: { series: DayCount[] }) {
-  const withMail = series.filter((day) => day.count > 0);
+function DataTable({
+  series,
+  unit,
+  title,
+}: {
+  series: DayCount[];
+  unit: SeriesUnit;
+  title: string;
+}) {
+  const withData = series.filter((day) => day.count > 0);
 
-  if (withMail.length === 0) {
+  if (withData.length === 0) {
     return null;
   }
 
@@ -164,20 +187,20 @@ function DataTable({ series }: { series: DayCount[] }) {
 
       <table className="mt-2 w-full text-xs">
         <caption className="sr-only">
-          Emails recebidos por dia, apenas os dias com pelo menos um.
+          {title}, apenas os dias com pelo menos um.
         </caption>
         <thead>
           <tr className="text-left text-zinc-500 dark:text-zinc-400">
             <th scope="col" className="py-1 font-normal">
               Dia
             </th>
-            <th scope="col" className="py-1 text-right font-normal">
-              Emails
+            <th scope="col" className="py-1 text-right font-normal capitalize">
+              {unit.many}
             </th>
           </tr>
         </thead>
         <tbody>
-          {withMail.map((day) => (
+          {withData.map((day) => (
             <tr
               key={day.date}
               className="border-t border-zinc-100 dark:border-zinc-800"
