@@ -17,9 +17,13 @@ async function bootstrap() {
   });
 
   const port = config.get('PORT', { infer: true });
-  await app.listen(port);
+  const host = config.get('API_HOST', { infer: true });
 
-  Logger.log(`Worker ouvindo em http://localhost:${port}`, 'Bootstrap');
+  // Com host explícito: o padrão do Nest é 0.0.0.0, e esta API não tem
+  // autenticação. Ver `API_HOST` em config/env.ts.
+  await app.listen(port, host);
+
+  Logger.log(`Worker ouvindo em http://${host}:${port}`, 'Bootstrap');
 }
 
 void bootstrap();

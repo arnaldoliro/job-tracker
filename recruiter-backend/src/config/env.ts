@@ -15,6 +15,21 @@ export const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3333),
+  /**
+   * Interface em que a API escuta. Padrão: SÓ a máquina local.
+   *
+   * A API não tem autenticação, e isso é decisão do §1 — um usuário, uma
+   * máquina. O que torna essa decisão segura é ninguém mais alcançá-la. Sem
+   * host, o Nest escuta em 0.0.0.0, e qualquer um na mesma rede Wi-Fi lia seu
+   * perfil, alterava seus dados e fazia seu navegador logado abrir a URL que
+   * quisesse. Mude só se souber por quê.
+   *
+   * `API_HOST` e não `HOST`: alguns shells — o zsh, por exemplo — definem
+   * `HOST` sozinhos com o nome da máquina. Se vazasse para o processo, a API
+   * escutaria no nome da máquina, que resolve para o IP da rede, e o buraco
+   * reabriria em silêncio.
+   */
+  API_HOST: z.string().min(1).default('127.0.0.1'),
   WEB_ORIGIN: z.url().default('http://localhost:3000'),
 
   // Infraestrutura: obrigatórias, o worker não funciona sem elas.

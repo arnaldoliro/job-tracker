@@ -164,3 +164,37 @@ body {
     }
   }
 }
+
+/*
+ * Impressão do currículo.
+ *
+ * O app inteiro some e sobra a folha: navegação, cabeçalho e botões não
+ * pertencem a um PDF que vai para um recrutador.
+ */
+@media print {
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* A folha some do tema escuro: fundo preto imprime como branco e o texto
+     claro sai quase invisível no papel. */
+  :root {
+    --background: #ffffff;
+    --foreground: #171717;
+  }
+
+  body {
+    background: #ffffff;
+    color: #171717;
+  }
+
+  [data-shell] {
+    animation: none;
+    display: block;
+    padding: 0;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

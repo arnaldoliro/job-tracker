@@ -26,6 +26,15 @@ export const applicationSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   job: applicationJobSchema,
+  /**
+   * A versão do currículo congelada nesta candidatura.
+   *
+   * `null` quando o currículo estava vazio na hora — e não um objeto com
+   * campos em branco, que afirmaria que você enviou um currículo vazio.
+   */
+  resumeVersion: z
+    .object({ id: z.string(), label: z.string(), createdAt: z.iso.datetime() })
+    .nullable(),
 });
 
 export type Application = z.infer<typeof applicationSchema>;

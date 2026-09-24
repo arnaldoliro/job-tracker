@@ -6,13 +6,18 @@ import {
 import type {
   Application,
   CreateApplicationInput,
+  Resume,
   UpdateApplicationInput,
 } from '@recruit/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { active } from './active';
+import { fingerprint, labelFor, snapshotOf } from './resume-snapshot';
 import type { ApplicationModel, JobModel } from '../generated/prisma/models';
 
 /** O que a API expõe da vaga. Menos que a tabela, de propósito. */
+/** Só o rótulo: o conteúdo do snapshot tem rota própria, e é grande. */
+const versionSelect = { id: true, label: true, createdAt: true } as const;
+
 const jobSelect = {
   id: true,
   company: true,
@@ -25,6 +30,7 @@ const jobSelect = {
 
 type ApplicationRow = ApplicationModel & {
   job: Pick<JobModel, keyof typeof jobSelect>;
+  resumeVersion: { id: string; label: string; createdAt: Date } | null;
 };
 
 @Injectable()
@@ -35,7 +41,10 @@ export class ApplicationService {
     const rows = await this.prisma.application.findMany({
       where: { profileId, ...active },
       orderBy: { updatedAt: 'desc' },
-      include: { job: { select: jobSelect } },
+      include: {
+        job: { select: jobSelect },
+        resumeVersion: { select: versionSelect },
+      },
     });
 
     return rows.map(toApplicationDto);
@@ -44,7 +53,10 @@ export class ApplicationService {
   async findById(id: string): Promise<Application> {
     const row = await this.prisma.application.findFirst({
       where: { id, ...active },
-      include: { job: { select: jobSelect } },
+      include: {
+        job: { select: jobSelect },
+        resumeVersion: { select: versionSelect },
+      },
     });
 
     if (!row) {
@@ -72,7 +84,7 @@ export class ApplicationService {
       // o insert — conferir antes deixaria uma janela entre checar e gravar.
       const profile = await tx.profile.findUnique({
         where: { id: input.profileId },
-        select: { id: true },
+        select: { id: true, resume: true },
       });
 
       if (!profile) {
@@ -132,6 +144,12 @@ export class ApplicationService {
         });
       }
 
+      const resumeVersionId = await freezeResume(
+        tx,
+        input.profileId,
+        profile.resume,
+      );
+
       const application = await tx.application.create({
         data: {
           profileId: input.profileId,
@@ -139,8 +157,12 @@ export class ApplicationService {
           status,
           notes: input.notes ?? null,
           appliedAt: input.appliedAt ? new Date(input.appliedAt) : null,
+          resumeVersionId,
         },
-        include: { job: { select: jobSelect } },
+        include: {
+          job: { select: jobSelect },
+          resumeVersion: { select: versionSelect },
+        },
       });
 
       await tx.statusEvent.create({
@@ -206,7 +228,10 @@ export class ApplicationService {
             appliedAt: input.appliedAt ? new Date(input.appliedAt) : null,
           }),
         },
-        include: { job: { select: jobSelect } },
+        include: {
+          job: { select: jobSelect },
+          resumeVersion: { select: versionSelect },
+        },
       });
 
       if (input.status !== undefined && input.status !== current.status) {
@@ -233,6 +258,39 @@ export class ApplicationService {
    * invisível e some das duas telas: não aparece na candidatura, porque ela
    * foi excluída, nem na caixa de não vinculados, porque ainda tem vínculo.
    */
+  /**
+   * O currículo exatamente como foi enviado nesta candidatura.
+   *
+   * Rota própria porque o conteúdo é grande e a listagem não precisa dele —
+   * o DTO da candidatura leva só o rótulo.
+   */
+  async resumeOf(id: string): Promise<Resume> {
+    const row = await this.prisma.application.findFirst({
+      where: { id, ...active },
+      select: { resumeVersion: { select: { content: true } } },
+    });
+
+    if (!row) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Candidatura não encontrada',
+      });
+    }
+
+    const resume = row.resumeVersion
+      ? snapshotOf(row.resumeVersion.content)
+      : null;
+
+    if (!resume) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Esta candidatura não tem currículo congelado',
+      });
+    }
+
+    return resume;
+  }
+
   async softDelete(id: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.application.updateMany({
@@ -273,5 +331,59 @@ function toApplicationDto(row: ApplicationRow): Application {
       workModel: row.job.workModel,
       location: row.job.location,
     },
+    resumeVersion: row.resumeVersion
+      ? {
+          id: row.resumeVersion.id,
+          label: row.resumeVersion.label,
+          createdAt: row.resumeVersion.createdAt.toISOString(),
+        }
+      : null,
   };
+}
+
+/**
+ * Congela o currículo do momento e devolve a versão a vincular.
+ *
+ * Reaproveita a última quando o conteúdo não mudou: sem isso seriam 30 linhas
+ * idênticas depois de 30 candidaturas numa semana, e "qual versão eu mandei"
+ * deixaria de ter resposta útil — teria 30 respostas iguais.
+ *
+ * Dentro da MESMA transação da candidatura. Fora dela, uma falha no insert da
+ * candidatura deixaria uma versão órfã, e a `ResumeVersion` passaria a contar
+ * uma história que não aconteceu.
+ *
+ * Sem currículo preenchido, devolve `null` e a candidatura fica sem versão —
+ * é o estado honesto de quem ainda não escreveu o currículo.
+ */
+async function freezeResume(
+  tx: Pick<PrismaService, 'resumeVersion'>,
+  profileId: string,
+  stored: unknown,
+): Promise<string | null> {
+  const resume = snapshotOf(stored);
+
+  if (!resume) {
+    return null;
+  }
+
+  const latest = await tx.resumeVersion.findFirst({
+    where: { profileId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, content: true },
+  });
+
+  if (latest) {
+    const previous = snapshotOf(latest.content);
+
+    if (previous && fingerprint(previous) === fingerprint(resume)) {
+      return latest.id;
+    }
+  }
+
+  const created = await tx.resumeVersion.create({
+    data: { profileId, label: labelFor(new Date()), content: resume },
+    select: { id: true },
+  });
+
+  return created.id;
 }

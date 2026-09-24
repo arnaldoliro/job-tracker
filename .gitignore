@@ -15,6 +15,9 @@ build/
 
 # playwright / dados locais
 storageState.json
+# Perfil do Chrome usado no preenchimento de formulário: guarda SESSÃO LOGADA
+# dos ATS. Nunca versionar (§5).
+.browser-profile/
 *.db
 
 # logs / SO

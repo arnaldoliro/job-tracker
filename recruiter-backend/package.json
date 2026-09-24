@@ -37,6 +37,7 @@
     "@recruit/shared": "^0.0.1",
     "imapflow": "^2.0.2",
     "mailparser": "^3.9.24",
+    "playwright-core": "^1.63.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.5.4"
