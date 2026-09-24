@@ -3,6 +3,7 @@ import type { ApplicationFacts, Metrics } from '@recruit/shared';
 import { active } from '../application/active';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildFunnel } from './funnel';
+import { responseTime } from './response-time';
 import { buildDailySeries, buildSourceYield, SERIES_DAYS } from './series';
 
 /**
@@ -42,8 +43,9 @@ export class MetricsService {
           select: {
             id: true,
             status: true,
+            appliedAt: true,
             job: { select: { source: true, url: true } },
-            statusEvents: { select: { toStatus: true } },
+            statusEvents: { select: { toStatus: true, occurredAt: true } },
           },
         }),
         this.prisma.application.count({
@@ -94,6 +96,12 @@ export class MetricsService {
       emailsByDay: buildDailySeries(
         emails.map((email) => email.receivedAt),
         SERIES_DAYS,
+      ),
+      responseTime: responseTime(
+        rows.map((row) => ({
+          appliedAt: row.appliedAt,
+          events: row.statusEvents,
+        })),
       ),
       excluded,
       minimumForRates: MIN_FOR_RATES,

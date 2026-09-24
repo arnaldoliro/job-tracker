@@ -126,6 +126,20 @@ export const metricsSchema = z.object({
   emailsByDay: z.array(dayCountSchema),
 
   /**
+   * Tempo até a primeira resposta — do envio ao primeiro movimento da
+   * empresa, recusa incluída.
+   *
+   * Mediana e não média, e sempre com o tamanho da amostra junto: "5 dias"
+   * sobre uma resposta é um caso, não um padrão, e a tela precisa poder dizer.
+   * `medianDays` é nulo quando ninguém respondeu ainda — zero afirmaria uma
+   * resposta instantânea.
+   */
+  responseTime: z.object({
+    medianDays: z.number().min(0).nullable(),
+    sample: z.number().int().min(0),
+  }),
+
+  /**
    * Candidaturas apagadas, que NÃO entram em número nenhum desta tela (§3).
    *
    * Existe só para a tela poder dizer isso. Hoje são 4 de 8, e ver "4

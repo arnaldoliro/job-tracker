@@ -67,6 +67,11 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
             )}
           </section>
 
+          <ResponseTime
+            medianDays={metrics.responseTime.medianDays}
+            sample={metrics.responseTime.sample}
+          />
+
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile label="Ativas" value={metrics.active} delay={0} />
             <Tile
@@ -154,6 +159,53 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Tempo até a primeira resposta.
+ *
+ * O número vem SEMPRE com a amostra ao lado. "5 dias" sobre uma resposta é um
+ * caso, não um padrão — sem dizer de quantas saiu, a mediana aparenta uma
+ * precisão que não tem.
+ */
+function ResponseTime({
+  medianDays,
+  sample,
+}: {
+  medianDays: number | null;
+  sample: number;
+}) {
+  return (
+    <section className="metric-tile flex flex-col gap-1 rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-800">
+      <span className="text-xs text-zinc-600 dark:text-zinc-400">
+        Tempo até a primeira resposta
+      </span>
+
+      {medianDays === null ? (
+        // Nulo e não zero: zero afirmaria uma resposta instantânea.
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">
+          Nenhuma empresa respondeu ainda.
+        </span>
+      ) : (
+        <span className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold tabular-nums">
+            {medianDays.toLocaleString("pt-BR")}
+          </span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">
+            {medianDays === 1 ? "dia" : "dias"}
+          </span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+            mediana de {sample} {sample === 1 ? "resposta" : "respostas"}
+          </span>
+        </span>
+      )}
+
+      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+        Conta a partir da data real de cada mudança. Registrou atrasado? Corrija a
+        data no histórico da candidatura.
+      </span>
+    </section>
   );
 }
 
