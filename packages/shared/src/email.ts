@@ -150,9 +150,40 @@ export const emailSyncResultSchema = z.object({
   stored: z.number().int(),
   linked: z.number().int(),
   relinked: z.number().int(),
+  /** Emails vinculados que o modelo leu nesta rodada. Zero sem chave da API. */
+  classified: z.number().int(),
   skipped: z.number().int(),
   failed: z.array(z.string()),
   tookMs: z.number().int(),
 });
 
 export type EmailSyncResult = z.infer<typeof emailSyncResultSchema>;
+
+/**
+ * Uma mudança de status que um email sugere.
+ *
+ * É SUGESTÃO, e o contrato não tem como expressar outra coisa: nada aqui muda
+ * a candidatura. Ela só muda quando você confirma — "we're moving forward
+ * with other candidates" e "we'd like to move forward with you" são quase a
+ * mesma frase com sentidos opostos (seção 4 do CLAUDE.md).
+ *
+ * A API devolve só as sugestões que ainda fazem sentido: uma por candidatura,
+ * a do email mais recente, e nunca uma que você já tenha atropelado mudando o
+ * status à mão depois que o email chegou.
+ */
+export const statusSuggestionSchema = z.object({
+  emailId: z.string(),
+  applicationId: z.string(),
+  toStatus: applicationStatusSchema,
+  /**
+   * CONTEÚDO GERADO a partir de email de terceiro: o porquê da sugestão, em
+   * uma frase. Renderizado como texto, nunca como HTML nem como instrução.
+   */
+  note: z.string().nullable(),
+  /** CONTEÚDO NÃO CONFIÁVEL. */
+  subject: z.string(),
+  receivedAt: z.iso.datetime(),
+});
+
+export type StatusSuggestion = z.infer<typeof statusSuggestionSchema>;
+export const statusSuggestionListSchema = z.array(statusSuggestionSchema);

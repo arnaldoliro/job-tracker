@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,13 +12,19 @@ import type {
   EmailMessage,
   EmailStatus,
   EmailSyncResult,
+  StatusSuggestion,
   TimelineEntry,
 } from '@recruit/shared';
+import { active } from '../application/active';
 import { ApplicationService } from '../application/application.service';
 import type { Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { JOB_DIGEST_SENDERS } from './ats';
 import { classify, companyGuess } from './confirmation';
+import {
+  ClassifierUnavailableError,
+  EmailClassifierService,
+} from './email-classifier.service';
 import { fetchSince, ImapError, type ImapConfig } from './imap.client';
 import {
   matchByCompany,
@@ -25,12 +32,14 @@ import {
   type Candidate,
   type MailFacts,
 } from './matcher';
+import { pickSuggestions } from './suggestion';
 
 /**
- * Ingestão de email: busca, guarda, vincula.
+ * Ingestão de email: busca, guarda, vincula, e pede ao modelo o sentido dos
+ * emails vinculados.
  *
- * Não classifica o sentido de nada e não muda status de candidatura. Isso é a
- * etapa seguinte, e exige o Claude — a seção 4 explica por quê.
+ * Nunca muda status de candidatura sozinha. O que o modelo lê vira sugestão,
+ * e só vira estado quando você confirma — a seção 4 explica por quê.
  */
 
 /** Primeira execução não varre anos de histórico de uma vez. */
@@ -44,15 +53,27 @@ const RELINK_DAYS = 90;
 
 const PREVIEW_CHARS = 220;
 
+/**
+ * Teto de chamadas ao modelo por rodada. O dia a dia são poucos emails; o
+ * teto é para o dia em que um resgate de 90 dias vincula dezenas de uma vez —
+ * o resto fica para as sincronizações seguintes.
+ */
+const CLASSIFY_BATCH = 20;
+
+/** Chamadas simultâneas: rápido o bastante sem esbarrar no limite da API. */
+const CLASSIFY_PARALLEL = 4;
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly config: ImapConfig | null;
   private running = false;
+  private classifying = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly applications: ApplicationService,
+    private readonly classifier: EmailClassifierService,
     config: ConfigService<Env, true>,
   ) {
     const host = config.get('IMAP_HOST', { infer: true });
@@ -101,7 +122,7 @@ export class EmailService {
       });
     }
 
-    // Cron, botão e boot não podem se sobrepor: seriam duas conexões IMAP
+    // Botão e boot não podem se sobrepor: seriam duas conexões IMAP
     // simultâneas e tempestade de chave duplicada.
     if (this.running) {
       throw new ServiceUnavailableException({
@@ -141,9 +162,10 @@ export class EmailService {
       }
 
       const relinked = await this.relinkOrphans();
+      const classified = await this.classifyPending();
 
       this.logger.log(
-        `Sincronização: ${mails.length} lidos, ${stored} novos, ${linked} vinculados, ${relinked} revinculados em ${Date.now() - started}ms`,
+        `Sincronização: ${mails.length} lidos, ${stored} novos, ${linked} vinculados, ${relinked} revinculados, ${classified} classificados em ${Date.now() - started}ms`,
       );
 
       return {
@@ -151,6 +173,7 @@ export class EmailService {
         stored,
         linked,
         relinked,
+        classified,
         skipped: mails.length - stored,
         failed,
         tookMs: Date.now() - started,
@@ -478,15 +501,260 @@ export class EmailService {
 
     await this.prisma.emailMessage.update({
       where: { id },
-      data: { applicationId, profileId: application.profileId },
+      // Candidatura nova, contexto novo: o email volta para a fila e é lido
+      // de novo com a empresa e o status certos.
+      data: {
+        applicationId,
+        profileId: application.profileId,
+        ...unclassified,
+      },
     });
+
+    // Sem esperar: vincular é um clique e não pode demorar o que o modelo
+    // demora. A sugestão aparece na candidatura assim que ficar pronta.
+    void this.classifyPending().catch((error: unknown) =>
+      this.logger.warn(
+        `Classificação após vincular o email ${id} (candidatura ${applicationId}) falhou: ${describe(error)}`,
+      ),
+    );
   }
 
   async unlink(id: string): Promise<void> {
     await this.prisma.emailMessage.update({
       where: { id },
-      data: { applicationId: null },
+      data: { applicationId: null, ...unclassified },
     });
+  }
+
+  /**
+   * Lê os emails vinculados que ainda não foram lidos.
+   *
+   * Só VINCULADOS, e isso é o filtro da seção 4: um email só chega aqui se
+   * entrou pelo rótulo do Gmail e casou com uma candidatura sua. A caixa
+   * inteira nunca sai da máquina, e os alertas de vaga também não — digest
+   * não é notícia de processo nenhum.
+   */
+  async classifyPending(): Promise<number> {
+    if (!this.classifier.configured || this.classifying) {
+      return 0;
+    }
+
+    this.classifying = true;
+
+    try {
+      const pending = await this.prisma.emailMessage.findMany({
+        where: {
+          processedAt: null,
+          fromAddress: { notIn: [...JOB_DIGEST_SENDERS] },
+          application: { is: active },
+        },
+        orderBy: { receivedAt: 'asc' },
+        take: CLASSIFY_BATCH,
+        select: {
+          id: true,
+          applicationId: true,
+          subject: true,
+          fromName: true,
+          fromAddress: true,
+          bodyText: true,
+          application: {
+            select: {
+              status: true,
+              job: { select: { company: true, title: true } },
+            },
+          },
+        },
+      });
+
+      let classified = 0;
+
+      for (let start = 0; start < pending.length; start += CLASSIFY_PARALLEL) {
+        const chunk = pending.slice(start, start + CLASSIFY_PARALLEL);
+        const outcomes = await Promise.allSettled(
+          chunk.map(async (email) => {
+            const application = email.application!;
+            const verdict = await this.classifier.classify({
+              subject: email.subject,
+              fromName: email.fromName,
+              fromAddress: email.fromAddress,
+              bodyText: email.bodyText,
+              company: application.job.company,
+              title: application.job.title,
+              current: application.status,
+            });
+
+            if (!verdict) {
+              // Resposta fora do schema é do email, não da API: tentar de novo
+              // daria o mesmo. Fica marcado como lido, sem sugestão.
+              this.logger.warn(
+                `Email ${email.id} (candidatura ${email.applicationId}) sem classificação válida`,
+              );
+            }
+
+            await this.prisma.emailMessage.update({
+              where: { id: email.id },
+              data: {
+                processedAt: new Date(),
+                suggestedStatus:
+                  verdict && verdict.status !== 'nenhum'
+                    ? verdict.status
+                    : null,
+                suggestionNote: verdict?.motivo ?? null,
+              },
+            });
+          }),
+        );
+
+        classified += outcomes.filter(
+          (outcome) => outcome.status === 'fulfilled',
+        ).length;
+
+        const failure = outcomes.find(
+          (outcome) => outcome.status === 'rejected',
+        );
+
+        if (failure) {
+          // API fora, sem crédito, limite: insistir agora só repete o erro.
+          // O que sobrou continua com `processedAt` nulo e volta na próxima
+          // rodada.
+          const reason: unknown = failure.reason;
+
+          this.logger.warn(
+            reason instanceof ClassifierUnavailableError
+              ? `Classificação interrompida: ${reason.message}`
+              : `Classificação interrompida: ${describe(reason)}`,
+          );
+          break;
+        }
+      }
+
+      return classified;
+    } finally {
+      this.classifying = false;
+    }
+  }
+
+  /** As sugestões que ainda são notícia, no máximo uma por candidatura. */
+  async suggestions(profileId: string): Promise<StatusSuggestion[]> {
+    const rows = await this.prisma.emailMessage.findMany({
+      where: {
+        suggestedStatus: { not: null },
+        suggestionResolvedAt: null,
+        application: { is: { profileId, ...active } },
+      },
+      select: {
+        id: true,
+        applicationId: true,
+        subject: true,
+        receivedAt: true,
+        suggestedStatus: true,
+        suggestionNote: true,
+        application: {
+          select: {
+            status: true,
+            statusEvents: {
+              where: { fromStatus: { not: null } },
+              orderBy: { occurredAt: 'desc' },
+              take: 1,
+              select: { occurredAt: true },
+            },
+          },
+        },
+      },
+    });
+
+    const picked = pickSuggestions(
+      rows.map((row) => ({
+        ...row,
+        emailId: row.id,
+        applicationId: row.applicationId!,
+        suggested: row.suggestedStatus!,
+        current: row.application!.status,
+        lastTransitionAt: row.application!.statusEvents[0]?.occurredAt ?? null,
+      })),
+    );
+
+    return picked.map((row) => ({
+      emailId: row.emailId,
+      applicationId: row.applicationId,
+      toStatus: row.suggested,
+      note: row.suggestionNote,
+      subject: row.subject,
+      receivedAt: row.receivedAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Você confirmou: a sugestão vira status.
+   *
+   * Pelo `ApplicationService.update()`, o único lugar que muda status, com o
+   * evento marcado como `ia`, apontando para o email e datado de quando o
+   * email CHEGOU — é quando a empresa respondeu, e é o que o tempo até a
+   * primeira resposta mede.
+   *
+   * A sugestão é reivindicada antes, num `updateMany` condicional: dois
+   * cliques seguidos não gravam dois eventos.
+   */
+  async acceptSuggestion(id: string): Promise<Application> {
+    const email = await this.prisma.emailMessage.findUnique({
+      where: { id },
+      select: {
+        applicationId: true,
+        suggestedStatus: true,
+        receivedAt: true,
+      },
+    });
+
+    if (!email?.applicationId || !email.suggestedStatus) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Sugestão não encontrada',
+      });
+    }
+
+    await this.claimSuggestion(id);
+
+    try {
+      return await this.applications.update(
+        email.applicationId,
+        { status: email.suggestedStatus },
+        {
+          source: 'ia',
+          emailMessageId: id,
+          occurredAt: email.receivedAt,
+        },
+      );
+    } catch (error) {
+      // O status não mudou, então a sugestão não foi resolvida.
+      await this.prisma.emailMessage.update({
+        where: { id },
+        data: { suggestionResolvedAt: null },
+      });
+
+      throw error;
+    }
+  }
+
+  async dismissSuggestion(id: string): Promise<void> {
+    await this.claimSuggestion(id);
+  }
+
+  private async claimSuggestion(id: string): Promise<void> {
+    const { count } = await this.prisma.emailMessage.updateMany({
+      where: {
+        id,
+        suggestedStatus: { not: null },
+        suggestionResolvedAt: null,
+      },
+      data: { suggestionResolvedAt: new Date() },
+    });
+
+    if (count === 0) {
+      throw new ConflictException({
+        error: 'Conflict',
+        message: 'Esta sugestão já foi resolvida.',
+      });
+    }
   }
 
   /**
@@ -586,6 +854,14 @@ export class EmailService {
     return entries.sort((a, b) => a.at.localeCompare(b.at));
   }
 }
+
+/** Volta o email para a fila de classificação, sem sugestão pendente. */
+const unclassified = {
+  processedAt: null,
+  suggestedStatus: null,
+  suggestionNote: null,
+  suggestionResolvedAt: null,
+} as const;
 
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 86_400_000);

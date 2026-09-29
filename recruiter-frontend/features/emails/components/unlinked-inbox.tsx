@@ -106,6 +106,8 @@ export function UnlinkedInbox({
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {sync.result.fetched} lidos · {sync.result.stored} novos ·{" "}
           {sync.result.linked} vinculados · {sync.result.relinked} revinculados
+          {sync.result.classified > 0 &&
+            ` · ${sync.result.classified} lidos pela IA`}
           {sync.result.failed.length > 0 &&
             ` · ${sync.result.failed.length} falharam`}
         </p>

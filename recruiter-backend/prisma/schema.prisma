@@ -29,8 +29,9 @@ enum ApplicationStatus {
   rejeitado
 }
 
-/// De onde veio a transição de status. `ia` significa que um modelo sugeriu a
-/// mudança — a confirmação humana é registrada convertendo para `manual`.
+/// De onde veio a transição de status. `ia` significa que um modelo leu um
+/// email e sugeriu a mudança, e você a CONFIRMOU — o evento só existe depois
+/// do clique. Sugestão pendente não é evento: mora em `EmailMessage`.
 enum StatusEventSource {
   manual
   email
@@ -321,6 +322,16 @@ model EmailMessage {
 
   /// Nulo enquanto o job de classificação não rodou.
   processedAt DateTime?
+
+  /// O status que o modelo leu no email. SUGESTÃO, nunca estado: só vira
+  /// `Application.status` quando você confirma (seção 4 do CLAUDE.md).
+  /// Nulo quando o email não indica mudança nenhuma.
+  suggestedStatus      ApplicationStatus?
+  /// Por que o modelo sugeriu — texto GERADO a partir de conteúdo não
+  /// confiável. Vai para a tela como texto, e só.
+  suggestionNote       String?
+  /// Você confirmou ou dispensou. A partir daqui a sugestão não aparece mais.
+  suggestionResolvedAt DateTime?
 
   createdAt DateTime @default(now())
 

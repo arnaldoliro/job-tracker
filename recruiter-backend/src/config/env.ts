@@ -35,8 +35,7 @@ export const envSchema = z.object({
   // Infraestrutura: obrigatória, o backend não funciona sem ela.
   //
   // Sem `REDIS_URL`: ela era obrigatória no boot e nenhum código a lia. O
-  // Redis estava previsto para filas BullMQ que nunca foram necessárias — um
-  // job, uma caixa de email, a cada 15 minutos cabe no `@nestjs/schedule`.
+  // Redis estava previsto para filas BullMQ que nunca foram necessárias.
   DATABASE_URL: z.url(),
 
   // Opcionais: sem elas, a feature correspondente fica desligada.
@@ -58,15 +57,16 @@ export const envSchema = z.object({
     z.string().min(1).default('job-tracker'),
   ),
   /**
-   * Sincronizar ao subir o processo. Desligado por padrão de propósito: em
-   * `nest start --watch` o backend reinicia a cada arquivo salvo, e isso viraria
-   * uma conexão IMAP por gravação.
+   * Sincronizar ao subir o processo — a única sincronização que acontece sem
+   * clique. Ligada por padrão; desligue com `false` se usar
+   * `nest start --watch`, que reinicia a cada arquivo salvo e abriria uma
+   * conexão IMAP por gravação.
    *
    * NÃO usar `z.coerce.boolean()`: ele converte a string "false" em `true`.
    */
   IMAP_SYNC_ON_BOOT: z.preprocess(
     (value) => (typeof value === 'string' ? value.trim() === 'true' : value),
-    z.boolean().default(false),
+    z.boolean().default(true),
   ),
 });
 

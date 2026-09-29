@@ -3,12 +3,14 @@ import {
   applicationListSchema,
   applicationSchema,
   createApplicationSchema,
+  statusSuggestionListSchema,
   timelineSchema,
   updateApplicationSchema,
 } from "@recruit/shared";
 import type {
   Application,
   CreateApplicationInput,
+  StatusSuggestion,
   TimelineEntry,
   UpdateApplicationInput,
 } from "@recruit/shared";
@@ -102,5 +104,33 @@ export async function setEventDate(
   await request(`/applications/${applicationId}/events/${eventId}`, {
     method: "PATCH",
     body: JSON.stringify({ occurredAt }),
+  });
+}
+
+/**
+ * O que os emails sugerem mudar no status. A rota mora em `/emails` porque é
+ * de lá que a sugestão sai, mas quem consome é a lista de candidaturas.
+ */
+export async function listSuggestions(
+  profileId: string,
+): Promise<StatusSuggestion[]> {
+  return statusSuggestionListSchema.parse(
+    await request(
+      `/emails/suggestions?profileId=${encodeURIComponent(profileId)}`,
+    ),
+  );
+}
+
+export async function acceptSuggestion(emailId: string): Promise<Application> {
+  return applicationSchema.parse(
+    await request(`/emails/${encodeURIComponent(emailId)}/suggestion/accept`, {
+      method: "POST",
+    }),
+  );
+}
+
+export async function dismissSuggestion(emailId: string): Promise<void> {
+  await request(`/emails/${encodeURIComponent(emailId)}/suggestion/dismiss`, {
+    method: "POST",
   });
 }

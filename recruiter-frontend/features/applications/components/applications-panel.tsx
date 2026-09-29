@@ -10,17 +10,26 @@ import {
   type ModalEntry,
 } from "@/features/applications/components/application-modal";
 import { StatusSelect } from "@/features/applications/components/status-select";
+import { StatusSuggestionCard } from "@/features/applications/components/status-suggestion";
 import type { Application } from "@/features/applications/types";
+import type { StatusSuggestion } from "@recruit/shared";
 
 interface ApplicationsPanelProps {
   profileId: string;
   applications: Application[];
+  /** No máximo uma por candidatura — o backend já escolheu. */
+  suggestions: StatusSuggestion[];
 }
 
 export function ApplicationsPanel({
   profileId,
   applications,
+  suggestions,
 }: ApplicationsPanelProps) {
+  const suggestionFor = new Map(
+    suggestions.map((suggestion) => [suggestion.applicationId, suggestion]),
+  );
+
   // O entry não é limpo ao fechar: manter o último conteúdo evita o modal
   // esvaziar no meio da animação de saída.
   const [entry, setEntry] = useState<ModalEntry | null>(null);
@@ -108,6 +117,13 @@ export function ApplicationsPanel({
                   </div>
 
                   <Meta application={application} />
+
+                  {suggestionFor.has(application.id) && (
+                    <StatusSuggestionCard
+                      suggestion={suggestionFor.get(application.id)!}
+                      onError={setError}
+                    />
+                  )}
 
                   <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/5 pt-4">
                     <StatusSelect

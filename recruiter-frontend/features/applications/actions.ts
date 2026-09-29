@@ -9,9 +9,11 @@ import {
 import type { ApplicationStatus, TimelineEntry } from "@recruit/shared";
 import {
   ApiError,
+  acceptSuggestion,
   createApplication,
   getTimeline,
   deleteApplication,
+  dismissSuggestion,
   setEventDate,
   updateApplication,
 } from "@/features/applications/api";
@@ -218,5 +220,44 @@ export async function setEventDateAction(
       message:
         error instanceof ApiError ? error.message : "Não consegui salvar a data.",
     };
+  }
+}
+
+/**
+ * Confirma o que o email sugeriu. É o clique que a seção 4 exige: sem ele, a
+ * leitura do modelo nunca vira status.
+ */
+export async function acceptSuggestionAction(
+  emailId: string,
+): Promise<DeleteState> {
+  try {
+    await acceptSuggestion(emailId);
+    revalidatePath("/");
+    revalidatePath("/metricas");
+
+    return { status: "success" };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+
+    return { status: "error", message: "Não foi possível confirmar." };
+  }
+}
+
+export async function dismissSuggestionAction(
+  emailId: string,
+): Promise<DeleteState> {
+  try {
+    await dismissSuggestion(emailId);
+    revalidatePath("/");
+
+    return { status: "success" };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { status: "error", message: error.message };
+    }
+
+    return { status: "error", message: "Não foi possível dispensar." };
   }
 }

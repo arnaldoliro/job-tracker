@@ -5,6 +5,7 @@ export * from './job';
 export * from './job-extraction';
 export * from './form-fill';
 export * from './job-preferences';
+export * from './loopback';
 export * from './metrics';
 export * from './profile';
 export * from './resume';
