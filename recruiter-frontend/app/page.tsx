@@ -1,4 +1,8 @@
-import { ApplicationsPanel, listApplications } from "@/features/applications";
+import {
+  ApplicationsPanel,
+  listApplications,
+  listSuggestions,
+} from "@/features/applications";
 import { getSelectedProfile } from "@/features/profile/current-profile";
 
 export default async function CandidaturasPage() {
@@ -9,9 +13,16 @@ export default async function CandidaturasPage() {
     return null;
   }
 
-  const applications = await listApplications(profile.id);
+  const [applications, suggestions] = await Promise.all([
+    listApplications(profile.id),
+    listSuggestions(profile.id),
+  ]);
 
   return (
-    <ApplicationsPanel profileId={profile.id} applications={applications} />
+    <ApplicationsPanel
+      profileId={profile.id}
+      applications={applications}
+      suggestions={suggestions}
+    />
   );
 }

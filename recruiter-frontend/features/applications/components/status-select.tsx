@@ -24,7 +24,7 @@ interface StatusSelectProps {
 }
 
 /** Cor do ponto de cada status, na mesma ordem de cores do badge. */
-const statusDot: Record<ApplicationStatus, string> = {
+export const statusDot: Record<ApplicationStatus, string> = {
   rascunho: "bg-zinc-400 shadow-zinc-400/60",
   aplicado: "bg-sky-400 shadow-sky-400/60",
   triagem: "bg-indigo-400 shadow-indigo-400/60",
