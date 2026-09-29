@@ -34,6 +34,20 @@ type ApplicationRow = ApplicationModel & {
   resumeVersion: { id: string; label: string; createdAt: Date } | null;
 };
 
+/**
+ * De onde veio uma mudança de status que não foi clique na tela.
+ *
+ * Parâmetro de código, e não campo do corpo HTTP: o `updateApplicationSchema`
+ * continua sem `source`, então nenhum cliente consegue gravar um evento se
+ * passando por confirmação de sugestão.
+ */
+export interface StatusOrigin {
+  source: 'ia';
+  emailMessageId: string;
+  /** Quando a empresa respondeu — o email —, não quando você confirmou. */
+  occurredAt: Date;
+}
+
 @Injectable()
 export class ApplicationService {
   constructor(private readonly prisma: PrismaService) {}
@@ -194,6 +208,7 @@ export class ApplicationService {
   async update(
     id: string,
     input: UpdateApplicationInput,
+    origin?: StatusOrigin,
   ): Promise<Application> {
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await tx.application.findFirst({
@@ -245,7 +260,9 @@ export class ApplicationService {
             applicationId: id,
             fromStatus: current.status,
             toStatus: input.status,
-            source: 'manual',
+            source: origin?.source ?? 'manual',
+            emailMessageId: origin?.emailMessageId,
+            occurredAt: origin?.occurredAt,
           },
         });
       }

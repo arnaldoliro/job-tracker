@@ -21,9 +21,11 @@ import type {
   EmailStatus,
   EmailSyncResult,
   LinkEmailInput,
+  StatusSuggestion,
   SyncEmailsQuery,
   TimelineEntry,
 } from '@recruit/shared';
+import { ProfileExistsPipe } from '../common/pipes/profile-exists.pipe';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { EmailService } from './email.service';
 
@@ -41,6 +43,28 @@ export class EmailController {
   @Get('emails/status')
   status(): EmailStatus {
     return this.emails.status();
+  }
+
+  /**
+   * Sugestões de status do perfil. Nenhuma rota aqui muda status sem um
+   * POST explícito seu — ler a lista não aplica nada.
+   */
+  @Get('emails/suggestions')
+  suggestions(
+    @Query('profileId', ProfileExistsPipe) profileId: string,
+  ): Promise<StatusSuggestion[]> {
+    return this.emails.suggestions(profileId);
+  }
+
+  @Post('emails/:id/suggestion/accept')
+  acceptSuggestion(@Param('id') id: string): Promise<Application> {
+    return this.emails.acceptSuggestion(id);
+  }
+
+  @Post('emails/:id/suggestion/dismiss')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  dismissSuggestion(@Param('id') id: string): Promise<void> {
+    return this.emails.dismissSuggestion(id);
   }
 
   @Post('emails/sync')

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ApplicationModule } from '../application/application.module';
+import { ProfileModule } from '../profile/profile.module';
+import { EmailClassifierService } from './email-classifier.service';
 import { EmailController } from './email.controller';
 import { EmailSyncScheduler } from './email-sync.scheduler';
 import { EmailService } from './email.service';
@@ -7,8 +9,8 @@ import { EmailService } from './email.service';
 @Module({
   // ApplicationModule porque criar candidatura a partir de um email passa pelo
   // mesmo `create()` da tela — com a transação e o StatusEvent que ele garante.
-  imports: [ApplicationModule],
+  imports: [ApplicationModule, ProfileModule],
   controllers: [EmailController],
-  providers: [EmailService, EmailSyncScheduler],
+  providers: [EmailService, EmailClassifierService, EmailSyncScheduler],
 })
 export class EmailModule {}

@@ -322,6 +322,16 @@ model EmailMessage {
   /// Nulo enquanto o job de classificação não rodou.
   processedAt DateTime?
 
+  /// O status que o modelo leu no email. SUGESTÃO, nunca estado: só vira
+  /// `Application.status` quando você confirma (seção 4 do CLAUDE.md).
+  /// Nulo quando o email não indica mudança nenhuma.
+  suggestedStatus      ApplicationStatus?
+  /// Por que o modelo sugeriu — texto GERADO a partir de conteúdo não
+  /// confiável. Vai para a tela como texto, e só.
+  suggestionNote       String?
+  /// Você confirmou ou dispensou. A partir daqui a sugestão não aparece mais.
+  suggestionResolvedAt DateTime?
+
   createdAt DateTime @default(now())
 
   profile     Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
