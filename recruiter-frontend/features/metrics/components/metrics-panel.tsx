@@ -1,4 +1,5 @@
 import type { Metrics } from "@recruit/shared";
+import { CountUp, Tilt } from "@/components/motion";
 import { AreaChart } from "./area-chart";
 import { FunnelChart } from "./funnel-chart";
 import { SourceYieldChart } from "./source-yield";
@@ -19,23 +20,23 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
   const moved = metrics.funnel.slice(1).some((step) => step.reached > 0);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold tracking-tight">Métricas</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <h1 className="text-3xl font-semibold">Métricas</h1>
+        <p className="text-sm text-zinc-400">
           O que aconteceu depois que você se candidatou.
         </p>
       </header>
 
       {metrics.active === 0 ? (
-        <p className="rounded-xl border border-dashed border-zinc-300 px-6 py-14 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+        <p className="cine-glass rounded-2xl px-6 py-14 text-center text-sm text-zinc-400">
           Sem candidaturas ativas. As métricas aparecem quando você registrar a
           primeira.
         </p>
       ) : (
         <>
           {metrics.active < metrics.minimumForRates && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            <p className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-5 py-3 text-sm text-amber-200 backdrop-blur-md">
               Base pequena: {metrics.active}{" "}
               {metrics.active === 1 ? "candidatura ativa" : "candidaturas ativas"}
               . Com poucos números, porcentagem vira ruído — por isso as taxas
@@ -43,155 +44,150 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
             </p>
           )}
 
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium">Funil</h2>
-
-            <FunnelChart steps={metrics.funnel} />
-
-            {!moved && (
-              // "Sem dados" seria mentira: existe dado, e a resposta é zero.
-              // A distinção é o ponto da tela inteira.
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Nenhuma candidatura ativa passou de &quot;aplicado&quot; ainda.
-              </p>
-            )}
-
-            {metrics.excluded > 0 && (
-              // Você lembra de oito candidaturas e a tela diz quatro. Sem esta
-              // linha, a tela certa parece quebrada.
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Candidaturas excluídas não entram em nenhum número desta tela (
-                {metrics.excluded}{" "}
-                {metrics.excluded === 1 ? "excluída" : "excluídas"}).
-              </p>
-            )}
-          </section>
-
-          <ResponseTime
-            medianDays={metrics.responseTime.medianDays}
-            sample={metrics.responseTime.sample}
-          />
-
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile label="Ativas" value={metrics.active} delay={0} />
+          {/* Os números de cabeça, numa faixa só: numa tela larga cabem os
+              oito lado a lado, e o olho lê a situação inteira de uma vez. */}
+          <section className="grid grid-cols-2 gap-4 md:grid-cols-4 2xl:grid-cols-8">
+            <Tile index={0} label="Ativas" value={metrics.active} />
+            <Tile index={1} label="Responderam" value={metrics.answered} hint="saíram de aplicado" />
+            <Tile index={2} label="Rejeitadas" value={metrics.rejected} />
+            <Tile index={3} label="Em rascunho" value={metrics.drafts} hint="ainda não enviadas" />
             <Tile
-              label="Responderam"
-              value={metrics.answered}
-              hint="saíram de aplicado"
-              delay={60}
+              index={4}
+              label="Vagas recebidas"
+              value={metrics.jobsSeen}
+              hint={metrics.jobsSeen === 0 ? "começa na primeira busca" : "mostradas na descoberta"}
             />
-            <Tile label="Rejeitadas" value={metrics.rejected} delay={120} />
+            <Tile index={5} label="Salvas" value={metrics.jobsSaved} />
+            <Tile index={6} label="Dispensadas" value={metrics.jobsDismissed} />
             <Tile
-              label="Em rascunho"
-              value={metrics.drafts}
-              hint="ainda não enviadas"
-              delay={180}
+              index={7}
+              label="Emails"
+              value={metrics.emailsReceived}
+              hint={`${metrics.emailsLinked} vinculados`}
             />
           </section>
 
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium">Vagas e emails</h2>
+          <div className="grid gap-5 xl:grid-cols-3">
+            <Panel index={8} title="Funil" className="xl:col-span-2">
+              <FunnelChart steps={metrics.funnel} />
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Tile
-                label="Vagas recebidas"
-                value={metrics.jobsSeen}
-                hint={
-                  metrics.jobsSeen === 0
-                    ? "a contagem começa na primeira busca"
-                    : "mostradas na descoberta"
-                }
-                delay={0}
-              />
-              <Tile label="Salvas" value={metrics.jobsSaved} delay={60} />
-              <Tile
-                label="Dispensadas"
-                value={metrics.jobsDismissed}
-                delay={120}
-              />
-              <Tile
-                label="Emails"
-                value={metrics.emailsReceived}
-                hint={`${metrics.emailsLinked} vinculados`}
-                delay={180}
-              />
-            </div>
-          </section>
-
-          {metrics.sourceYield.length > 0 && (
-            <section className="flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
-                <h2 className="text-sm font-medium">
-                  O que cada fonte rendeu
-                </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  De quantas vagas mostradas você aproveitou alguma. Passe o
-                  mouse para ver a quebra.
-                </p>
-              </div>
-
-              <SourceYieldChart items={metrics.sourceYield} />
-            </section>
-          )}
-
-          {metrics.emailsReceived > 0 && (
-            <section className="flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
-                <h2 className="text-sm font-medium">Emails por dia</h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  O ritmo com que processo seletivo te procura.
-                </p>
-              </div>
-
-              <AreaChart
-                series={metrics.emailsByDay}
-                unit={{ one: "email", many: "emails" }}
-                title="Emails por dia"
-              />
-            </section>
-          )}
-
-          {metrics.jobsSeen > 0 && (
-            <section className="flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
-                <h2 className="text-sm font-medium">Vagas recebidas por dia</h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Quantas vagas novas a descoberta te mostrou. A contagem
-                  começou em{" "}
-                  {firstDay(metrics.jobsSeenByDay)} — antes disso a descoberta
-                  não guardava histórico.
-                </p>
-              </div>
-
-              {metrics.jobsSeenByDay.length >= 2 ? (
-                <AreaChart
-                  series={metrics.jobsSeenByDay}
-                  unit={{ one: "vaga", many: "vagas" }}
-                  title="Vagas recebidas por dia"
-                />
-              ) : (
-                // Um dia só não é série: seria um ponto solto, sem linha. O
-                // gráfico aparece quando houver o que ligar.
-                <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                  {metrics.jobsSeen} vagas no primeiro dia de medição. O gráfico
-                  aparece a partir do segundo dia.
+              {!moved && (
+                // "Sem dados" seria mentira: existe dado, e a resposta é zero.
+                // A distinção é o ponto da tela inteira.
+                <p className="text-xs text-zinc-400">
+                  Nenhuma candidatura ativa passou de &quot;aplicado&quot; ainda.
                 </p>
               )}
-            </section>
-          )}
 
-          {metrics.bySource.length > 0 && (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-medium">
-                De onde vieram suas candidaturas
-              </h2>
+              {metrics.excluded > 0 && (
+                // Você lembra de oito candidaturas e a tela diz quatro. Sem
+                // esta linha, a tela certa parece quebrada.
+                <p className="text-xs text-zinc-500">
+                  Candidaturas excluídas não entram em nenhum número desta tela
+                  ({metrics.excluded}{" "}
+                  {metrics.excluded === 1 ? "excluída" : "excluídas"}).
+                </p>
+              )}
+            </Panel>
 
-              <SourceBars items={metrics.bySource} />
-            </section>
-          )}
+            <ResponseTime
+              medianDays={metrics.responseTime.medianDays}
+              sample={metrics.responseTime.sample}
+            />
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-2">
+            {metrics.emailsReceived > 0 && (
+              <Panel
+                index={10}
+                title="Emails por dia"
+                subtitle="O ritmo com que processo seletivo te procura."
+              >
+                <AreaChart
+                  series={metrics.emailsByDay}
+                  unit={{ one: "email", many: "emails" }}
+                  title="Emails por dia"
+                />
+              </Panel>
+            )}
+
+            {metrics.jobsSeen > 0 && (
+              <Panel
+                index={11}
+                title="Vagas recebidas por dia"
+                subtitle={`Quantas vagas novas a descoberta te mostrou. A contagem começou em ${firstDay(metrics.jobsSeenByDay)} — antes disso a descoberta não guardava histórico.`}
+              >
+                {metrics.jobsSeenByDay.length >= 2 ? (
+                  <AreaChart
+                    series={metrics.jobsSeenByDay}
+                    unit={{ one: "vaga", many: "vagas" }}
+                    title="Vagas recebidas por dia"
+                  />
+                ) : (
+                  // Um dia só não é série: seria um ponto solto, sem linha.
+                  <p className="rounded-xl border border-dashed border-white/10 px-4 py-3 text-sm text-zinc-400">
+                    {metrics.jobsSeen} vagas no primeiro dia de medição. O
+                    gráfico aparece a partir do segundo dia.
+                  </p>
+                )}
+              </Panel>
+            )}
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-2">
+            {metrics.sourceYield.length > 0 && (
+              <Panel
+                index={12}
+                title="O que cada fonte rendeu"
+                subtitle="De quantas vagas mostradas você aproveitou alguma. Passe o mouse para ver a quebra."
+              >
+                <SourceYieldChart items={metrics.sourceYield} />
+              </Panel>
+            )}
+
+            {metrics.bySource.length > 0 && (
+              <Panel index={13} title="De onde vieram suas candidaturas">
+                <SourceBars items={metrics.bySource} />
+              </Panel>
+            )}
+          </div>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Um bloco do painel: vidro sobre a cena, entrando em cascata.
+ *
+ * Sem `Tilt` de propósito. Inclinar um bloco com gráfico faz o gráfico
+ * inteiro balançar sob o cursor — justamente quando você está tentando ler um
+ * ponto dele. Os tiles, que são um número só, inclinam; os gráficos não.
+ */
+function Panel({
+  index,
+  title,
+  subtitle,
+  className = "",
+  children,
+}: {
+  index: number;
+  title: string;
+  subtitle?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className={`cine-reveal cine-glass flex flex-col gap-4 rounded-2xl p-6 ${className}`}
+      style={{ ["--i" as string]: index }}
+    >
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">{title}</h2>
+        {subtitle && <p className="text-xs text-zinc-400">{subtitle}</p>}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -210,31 +206,44 @@ function ResponseTime({
   sample: number;
 }) {
   return (
-    <section className="metric-tile flex flex-col gap-1 rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-800">
-      <span className="text-xs text-zinc-600 dark:text-zinc-400">
-        Tempo até a primeira resposta
-      </span>
+    <section
+      className="cine-reveal cine-glass relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl p-6"
+      style={{ ["--i" as string]: 9 }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full"
+        style={{
+          background:
+            "radial-gradient(closest-side, oklch(0.72 0.19 292 / 0.35), transparent)",
+        }}
+      />
+      <h2 className="text-base font-semibold">Tempo até a primeira resposta</h2>
 
       {medianDays === null ? (
         // Nulo e não zero: zero afirmaria uma resposta instantânea.
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">
+        <span className="text-sm text-zinc-400">
           Nenhuma empresa respondeu ainda.
         </span>
       ) : (
-        <span className="flex items-baseline gap-2">
-          <span className="text-2xl font-semibold tabular-nums">
-            {medianDays.toLocaleString("pt-BR")}
+        <span className="flex flex-col gap-1">
+          <span className="flex items-baseline gap-2">
+            <CountUp
+              value={medianDays}
+              decimals={Number.isInteger(medianDays) ? 0 : 1}
+              className="bg-gradient-to-br from-white to-zinc-400 bg-clip-text font-[family-name:var(--font-display)] text-6xl font-semibold text-transparent"
+            />
+            <span className="text-lg text-zinc-400">
+              {medianDays === 1 ? "dia" : "dias"}
+            </span>
           </span>
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            {medianDays === 1 ? "dia" : "dias"}
-          </span>
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+          <span className="text-xs text-zinc-500">
             mediana de {sample} {sample === 1 ? "resposta" : "respostas"}
           </span>
         </span>
       )}
 
-      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+      <span className="text-xs text-zinc-500">
         Conta a partir da data real de cada mudança. Registrou atrasado? Corrija a
         data no histórico da candidatura.
       </span>
@@ -243,26 +252,28 @@ function ResponseTime({
 }
 
 function Tile({
+  index,
   label,
   value,
   hint,
-  delay = 0,
 }: {
+  index: number;
   label: string;
   value: number;
   hint?: string;
-  delay?: number;
 }) {
   return (
-    <div
-      className="metric-tile flex flex-col gap-0.5 rounded-xl border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
-      <span className="text-xs text-zinc-600 dark:text-zinc-400">{label}</span>
-      {hint && (
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">{hint}</span>
-      )}
+    <div className="cine-reveal" style={{ ["--i" as string]: index }}>
+      <Tilt className="h-full rounded-2xl" max={10}>
+        <div className="cine-glass flex h-full flex-col gap-1 rounded-2xl px-5 py-4">
+          <CountUp
+            value={value}
+            className="font-[family-name:var(--font-display)] text-3xl font-semibold"
+          />
+          <span className="text-xs font-medium text-zinc-300">{label}</span>
+          {hint && <span className="text-xs text-zinc-500">{hint}</span>}
+        </div>
+      </Tilt>
     </div>
   );
 }

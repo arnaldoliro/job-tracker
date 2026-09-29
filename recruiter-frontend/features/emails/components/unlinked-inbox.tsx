@@ -62,11 +62,11 @@ export function UnlinkedInbox({
     });
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-[110rem] flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold tracking-tight">Emails</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <h1 className="text-3xl font-semibold">Emails</h1>
+          <p className="max-w-2xl text-sm text-zinc-400">
             Emails de processo seletivo que ainda não pertencem a nenhuma
             candidatura. Os que foram reconhecidos aparecem no histórico da
             candidatura.
@@ -77,7 +77,7 @@ export function UnlinkedInbox({
           type="button"
           onClick={run}
           disabled={pending || !status.configured}
-          className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
         >
           <IconMail />
           {pending ? "Sincronizando…" : "Sincronizar agora"}
@@ -85,7 +85,7 @@ export function UnlinkedInbox({
       </header>
 
       {!status.configured ? (
-        <p className="rounded-xl border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+        <p className="cine-glass rounded-2xl px-5 py-4 text-sm text-zinc-400">
           Email não configurado. Defina <code>IMAP_HOST</code>,{" "}
           <code>IMAP_USER</code> e <code>IMAP_PASSWORD</code> no <code>.env</code>{" "}
           do backend, com uma app password — nunca a senha principal da conta.
@@ -112,14 +112,15 @@ export function UnlinkedInbox({
       )}
 
       {emails.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-zinc-300 px-6 py-14 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+        <p className="cine-glass rounded-2xl px-6 py-14 text-center text-sm text-zinc-400">
           Nenhum email pendente.
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {emails.map((email) => (
+        <ul className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          {emails.map((email, index) => (
             <EmailCard
               key={email.id}
+              index={index}
               profileId={profileId}
               email={email}
               applications={applications}
@@ -132,10 +133,14 @@ export function UnlinkedInbox({
 }
 
 function EmailCard({
+  index,
   profileId,
   email,
   applications,
 }: {
+  /** Posição na lista, para a cascata de entrada. Sem inclinação aqui: o card
+      tem select e formulário, e um alvo que balança sob o cursor erra clique. */
+  index: number;
   profileId: string;
   email: EmailMessage;
   applications: Application[];
@@ -164,14 +169,17 @@ function EmailCard({
 
   if (done) {
     return (
-      <li className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+      <li className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-zinc-400">
         {done}
       </li>
     );
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+    <li
+      className="cine-reveal cine-glass flex flex-col gap-3 rounded-2xl p-5"
+      style={{ ["--i" as string]: index }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           {/* Assunto e remetente são texto de terceiro: vão como texto. */}

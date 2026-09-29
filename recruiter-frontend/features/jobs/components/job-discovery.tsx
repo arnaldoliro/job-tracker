@@ -223,10 +223,10 @@ export function JobDiscovery({
         <JobsTabs savedCount={savedCount} />
       </div>
 
-      <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+      <section className="cine-reveal cine-glass flex flex-col gap-3 rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Procurar vagas</h2>
+            <h2 className="text-lg font-semibold">Procurar vagas</h2>
             <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               Enquanto ligada, traz vagas de Gupy, Greenhouse, Ashby, Lever e
               agregadores de remoto. Nada é gravado até você salvar.
@@ -281,14 +281,14 @@ export function JobDiscovery({
               className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
                 running
                   ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                  : "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                  : "bg-gradient-to-r from-accent to-accent-2 text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 hover:brightness-110"
               }`}
             >
               <span
                 className={`size-2 rounded-full ${
                   running
                     ? "animate-pulse bg-white"
-                    : "bg-white/60 dark:bg-zinc-900/60"
+                    : "bg-zinc-950/60"
                 }`}
               />
               {running ? "Parar busca" : "Iniciar busca"}
@@ -332,10 +332,11 @@ export function JobDiscovery({
       </div>
 
       {items.length > 0 && (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {items.map((item) => (
+        <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {items.map((item, index) => (
             <ResultCard
               key={item.result.url}
+              index={index}
               profileId={profileId}
               item={item}
               dismissible
@@ -345,7 +346,7 @@ export function JobDiscovery({
       )}
 
       {items.length === 0 && !running && (
-        <p className="rounded-xl border border-dashed border-zinc-300 px-6 py-14 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+        <p className="cine-glass rounded-2xl px-6 py-14 text-center text-sm text-zinc-400">
           Inicie a busca para começar.
         </p>
       )}
