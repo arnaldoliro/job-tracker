@@ -14,20 +14,19 @@ candidatura. Se cadastrar uma vaga levar mais de trinta segundos, a planilha é
 abandonada na terceira semana — e com ela a única forma de saber o que está
 funcionando.
 
-Então o objetivo aqui é registrar **sem** digitar: a vaga vem da descoberta, e
-a confirmação de candidatura vem do email. O passo seguinte — o status andar
-sozinho quando a empresa responde — ainda não existe: ler o *sentido* de um
-email de recrutador exige um modelo, e é a próxima etapa.
+Então o objetivo aqui é registrar **sem** digitar: a vaga vem da descoberta, a
+confirmação de candidatura vem do email, e quando a empresa responde o Claude
+lê o email e sugere o novo status — você confirma com um clique.
 
 ## Estado
 
 Funciona hoje, sem chave de IA: descoberta de vagas, ingestão de email,
 currículo com PDF e versões, preenchimento de formulário e painel.
 
-Depende de chave da Anthropic com crédito: a extração de vaga por URL.
+Depende de chave da Anthropic com crédito: a extração de vaga por URL e a
+sugestão de status a partir do email.
 
-Ainda não existe: classificação automática de status a partir do email, e
-sugestões de reescrita do currículo para cada vaga.
+Ainda não existe: sugestões de reescrita do currículo para cada vaga.
 
 ## O que ele faz
 
@@ -41,6 +40,10 @@ cada email à candidatura certa e monta a linha do tempo de cada processo. Um
 email de confirmação de uma vaga que você esqueceu de registrar vira a
 candidatura com um clique.
 
+**Sugestão de status.** O Claude lê os emails já vinculados e, quando um deles
+é uma recusa, um convite para entrevista, um teste ou uma proposta, o card da
+candidatura mostra a sugestão com o motivo. Nada muda até você confirmar.
+
 **Currículo como dado.** O CV é estruturado — experiências, skills, projetos
 —, vira PDF pela impressão do navegador, e cada candidatura **congela** a
 versão enviada. Seis meses e três edições depois, dá para saber o que você
@@ -53,8 +56,7 @@ nome, email, telefone e links, e **para**. Você revisa e envia.
 de cada fonte de vaga, e o ritmo dos emails.
 
 **Extração por URL.** Cole o link de uma vaga e o Claude extrai empresa, cargo,
-stack e requisitos. É a única parte que usa IA hoje, e exige chave da
-Anthropic com crédito.
+stack e requisitos.
 
 ## Decisões que valem a leitura
 
@@ -63,6 +65,12 @@ e o contrato proíbe acesso automatizado — e o custo de um banimento seria a
 rede profissional inteira. Mas o LinkedIn **manda as vagas por email**, e ler
 a própria caixa não é raspagem. O parser lê os alertas; a página da vaga nunca
 é aberta pelo sistema.
+
+**O modelo sugere, você decide.** "Seguimos com outros candidatos" e
+"gostaríamos de seguir com você" são quase a mesma frase com sentidos opostos.
+A leitura do email vira uma sugestão no card, com o motivo ao lado, e o status
+só muda no seu clique. Só emails vinculados a uma candidatura vão para a API —
+a caixa de entrada nunca sai da máquina.
 
 **Formulário nunca é enviado automaticamente.** Candidatura enviada não tem
 desfazer, e as perguntas que decidem são as abertas, que o sistema se recusa a
