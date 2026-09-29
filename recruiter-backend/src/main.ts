@@ -1,8 +1,10 @@
 import { NestFactory } from '@nestjs/core';
+import type { NextFunction, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { rejectNonLocal } from './common/security/local-only';
 import type { Env } from './config/env';
 
 async function bootstrap() {
@@ -10,6 +12,27 @@ async function bootstrap() {
   const config = app.get(ConfigService<Env, true>);
 
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Antes de tudo, inclusive do CORS: requisição recusada aqui não chega a
+  // nenhuma rota. Ver `common/security/local-only.ts`.
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    const rejection = rejectNonLocal({
+      host: request.headers.host,
+      method: request.method,
+      contentType: request.headers['content-type'],
+    });
+
+    if (!rejection) {
+      next();
+      return;
+    }
+
+    response.status(rejection.status).json({
+      statusCode: rejection.status,
+      error: rejection.error,
+      message: rejection.message,
+    });
+  });
 
   app.enableCors({
     origin: config.get('WEB_ORIGIN', { infer: true }),

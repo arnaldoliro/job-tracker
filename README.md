@@ -164,8 +164,13 @@ Gmail garante esse limite antes de qualquer código ver um email.
 A sincronização roda uma vez quando o backend sobe e, depois, só quando você
 clica em **Sincronizar agora** na tela Emails — nada fica rodando sozinho
 gastando chamadas à API. Para buscar emails anteriores ao último
-sincronizado — depois de ampliar o filtro, por exemplo —, use
-`POST /emails/sync?days=45`.
+sincronizado — depois de ampliar o filtro, por exemplo —, chame a API
+direto:
+
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+  'http://127.0.0.1:3333/emails/sync?days=45'
+```
 
 ## Segurança
 
@@ -173,6 +178,13 @@ sincronizado — depois de ampliar o filtro, por exemplo —, use
 tem autenticação, e isso é deliberado para um app pessoal: é seguro porque
 ninguém mais a alcança. Com as portas abertas na rede, qualquer pessoa no
 mesmo Wi-Fi leria seu currículo e seus emails.
+
+Escutar só localmente não basta contra o próprio navegador: um site aberto
+nele consegue mandar requisições para `127.0.0.1`, e com DNS rebinding até ler
+as respostas. Por isso API e frontend recusam qualquer `Host` que não seja
+`127.0.0.1` ou `localhost`, e a API só aceita escrita com
+`Content-Type: application/json` — o tipo de requisição que um site de fora
+não consegue mandar sem que o navegador peça licença antes.
 
 Por isso **não publique este app num servidor** sem antes adicionar
 autenticação. Não é uma mudança de configuração.
