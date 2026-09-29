@@ -104,7 +104,7 @@ TypeScript em tudo, num monorepo com npm workspaces.
 | Camada     | Tecnologia                                       |
 | ---------- | ------------------------------------------------ |
 | Frontend   | Next.js 16 (App Router), React 19, Tailwind 4    |
-| Backend    | Nest.js 11, `@nestjs/schedule`                   |
+| Backend    | Nest.js 11                                       |
 | Banco      | PostgreSQL 16 + Prisma 7                         |
 | Contratos  | Zod 4, compartilhados em `packages/shared`       |
 | Email      | `imapflow` + `mailparser`                        |
@@ -161,8 +161,10 @@ Gmail garante esse limite antes de qualquer código ver um email.
 5. Preencha `IMAP_HOST`, `IMAP_USER` e `IMAP_PASSWORD` no
    `recruiter-backend/.env`.
 
-A sincronização roda a cada 15 minutos. Para buscar emails anteriores ao
-último sincronizado — depois de ampliar o filtro, por exemplo —, use
+A sincronização roda uma vez quando o backend sobe e, depois, só quando você
+clica em **Sincronizar agora** na tela Emails — nada fica rodando sozinho
+gastando chamadas à API. Para buscar emails anteriores ao último
+sincronizado — depois de ampliar o filtro, por exemplo —, use
 `POST /emails/sync?days=45`.
 
 ## Segurança

@@ -56,7 +56,7 @@ const PREVIEW_CHARS = 220;
 /**
  * Teto de chamadas ao modelo por rodada. O dia a dia são poucos emails; o
  * teto é para o dia em que um resgate de 90 dias vincula dezenas de uma vez —
- * o resto fica para as rodadas seguintes, a cada 15 minutos.
+ * o resto fica para as sincronizações seguintes.
  */
 const CLASSIFY_BATCH = 20;
 
@@ -122,7 +122,7 @@ export class EmailService {
       });
     }
 
-    // Cron, botão e boot não podem se sobrepor: seriam duas conexões IMAP
+    // Botão e boot não podem se sobrepor: seriam duas conexões IMAP
     // simultâneas e tempestade de chave duplicada.
     if (this.running) {
       throw new ServiceUnavailableException({

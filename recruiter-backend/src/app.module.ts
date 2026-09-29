@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApplicationModule } from './application/application.module';
@@ -19,7 +18,6 @@ import { ProfileModule } from './profile/profile.module';
       cache: true,
       validate: validateEnv,
     }),
-    ScheduleModule.forRoot(),
     PrismaModule,
     ProfileModule,
     ApplicationModule,
