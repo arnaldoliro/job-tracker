@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "motion/react";
 import {
   IconBriefcase,
   IconChart,
@@ -41,25 +42,25 @@ export function MainNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Seções">
-      <ul className="flex items-center gap-1">
+    <nav aria-label="Seções" className="min-w-0">
+      <ul className="flex items-center gap-1 overflow-x-auto">
         {items.map((item) => {
           const active = item.href ? isActive(pathname, item.href) : false;
-          const className = `group relative flex items-center gap-2 px-3 py-3 text-sm font-medium transition-colors duration-200 ${
+          const className = `group relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
             item.href
               ? active
-                ? "cursor-pointer text-zinc-900 dark:text-zinc-100"
-                : "cursor-pointer text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              : "cursor-not-allowed text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
+                ? "text-zinc-50"
+                : "text-zinc-400 hover:text-zinc-100"
+              : "cursor-not-allowed text-zinc-600"
           }`;
 
           const content = (
             <>
-              <span className="transition-transform duration-200 ease-out group-hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0">
+              {active && <ActivePill />}
+              <span className="relative transition-transform duration-200 ease-out group-hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0">
                 {item.icon}
               </span>
-              {item.label}
-              <Underline active={active} muted={!item.href} />
+              <span className="relative hidden sm:inline">{item.label}</span>
             </>
           );
 
@@ -69,7 +70,8 @@ export function MainNav() {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={className}
+                  aria-label={item.label}
+                  className={`cursor-pointer ${className}`}
                 >
                   {content}
                 </Link>
@@ -87,19 +89,22 @@ export function MainNav() {
 }
 
 /**
- * Sublinhado que cresce do centro no hover. `scale` é resolvido no compositor
- * — animar `width` dispararia layout a cada quadro.
+ * O fundo do item ativo, que DESLIZA até o próximo quando você troca de tela.
  *
- * O item ativo já nasce com o sublinhado inteiro; os demais crescem no hover,
- * em tom apagado, para o movimento não prometer uma seção que ainda não existe.
+ * `layoutId` é o que faz isso: o Motion reconhece que é o "mesmo" elemento em
+ * dois lugares do layout e anima a posição e o tamanho entre eles, por mola.
+ * Sem ele o fundo sumiria de um item e reapareceria no outro, sem viagem.
+ *
+ * Funciona entre páginas porque o cabeçalho vive no layout, que não remonta
+ * na navegação — o elemento sobrevive à troca de rota.
  */
-function Underline({ active, muted }: { active?: boolean; muted?: boolean }) {
+function ActivePill() {
   return (
-    <span
+    <motion.span
+      layoutId="nav-active"
       aria-hidden
-      className={`absolute inset-x-2 bottom-0 h-0.5 origin-center rounded-full transition-transform duration-200 ease-out motion-reduce:transition-none ${
-        muted ? "bg-zinc-300 dark:bg-zinc-700" : "bg-zinc-900 dark:bg-zinc-100"
-      } ${active ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"}`}
+      className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-b from-white/12 to-white/4 shadow-[0_0_20px_-6px] shadow-accent/70"
+      transition={{ type: "spring", stiffness: 380, damping: 32 }}
     />
   );
 }

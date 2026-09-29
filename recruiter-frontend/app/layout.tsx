@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
+import { Backdrop, MotionProvider } from "@/components/motion";
 import { ProfileGate } from "@/features/profile/components/profile-gate";
 import {
   getProfiles,
@@ -8,13 +9,26 @@ import {
 } from "@/features/profile/current-profile";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/*
+ * Duas famílias, com papéis diferentes. Plus Jakarta Sans no corpo: legível
+ * em tamanho pequeno e com mais calor que uma grotesca neutra. Space Grotesk
+ * nos títulos e nos números grandes do painel: geométrica, dá presença.
+ *
+ * `next/font` baixa as fontes no build e serve do próprio app — sem pedido ao
+ * Google no navegador e sem o texto piscar de fonte ao carregar.
+ */
+const body = Plus_Jakarta_Sans({
+  variable: "--font-body",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const heading = Space_Grotesk({
+  variable: "--font-heading",
+  subsets: ["latin"],
+});
+
+const code = Geist_Mono({
+  variable: "--font-code",
   subsets: ["latin"],
 });
 
@@ -41,12 +55,16 @@ export default async function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // `dark` fixo: o tema é escuro sempre, não conforme o sistema.
+      className={`dark ${body.variable} ${heading.variable} ${code.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ProfileGate profiles={profiles} selected={selected}>
-          {children}
-        </ProfileGate>
+        <Backdrop />
+        <MotionProvider>
+          <ProfileGate profiles={profiles} selected={selected}>
+            {children}
+          </ProfileGate>
+        </MotionProvider>
       </body>
     </html>
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import { Tilt } from "@/components/motion";
+
 import { useCallback, useState, useTransition } from "react";
 import { IconEye, IconPencil, IconPlus, IconTrash } from "@/components/icons";
 import { deleteApplicationAction } from "@/features/applications/actions";
@@ -48,13 +50,20 @@ export function ApplicationsPanel({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold tracking-tight">Candidaturas</h1>
+    <div className="flex w-full flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-semibold">Candidaturas</h1>
+          <p className="text-sm text-zinc-400">
+            {applications.length === 1
+              ? "1 processo em andamento"
+              : `${applications.length} processos em andamento`}
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => show({ mode: "create" })}
-          className="flex cursor-pointer items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98]"
         >
           <IconPlus />
           Nova candidatura
@@ -70,62 +79,81 @@ export function ApplicationsPanel({
       {applications.length === 0 ? (
         <EmptyState onCreate={() => show({ mode: "create" })} />
       ) : (
-        <ul className="flex flex-col divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-          {applications.map((application) => (
+        // Grade e não lista: numa tela larga a lista deixava dois terços da
+        // largura vazios. Cada card entra em cascata (`cine-reveal`, no <li>)
+        // e inclina com o cursor (`Tilt`, dentro dele) — em elementos
+        // separados porque os dois animam `transform`, e no mesmo elemento um
+        // sobrescreveria o outro.
+        <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {applications.map((application, index) => (
             <li
               key={application.id}
-              className="flex items-center gap-4 px-4 py-3"
+              className="cine-reveal"
+              style={{ ["--i" as string]: index }}
             >
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium">
-                  {application.job.company}
-                </span>
-                <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                  {application.job.title}
-                </span>
-              </div>
+              <Tilt className="h-full rounded-2xl">
+                <article className="cine-glass flex h-full flex-col gap-4 overflow-hidden rounded-2xl p-5">
+                  <span
+                    aria-hidden
+                    className={`-mx-5 -mt-5 h-1 ${statusStripe[application.status]}`}
+                  />
 
-              <StatusSelect
-                applicationId={application.id}
-                status={application.status}
-                onError={setError}
-              />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="truncate font-[family-name:var(--font-display)] text-lg font-semibold">
+                      {application.job.company}
+                    </span>
+                    <span className="line-clamp-2 text-sm text-zinc-400">
+                      {application.job.title}
+                    </span>
+                  </div>
 
-              <div className="flex items-center gap-1">
-                <IconButton
-                  label="Ver detalhes"
-                  onClick={() => show({ mode: "view", application })}
-                >
-                  <IconEye />
-                </IconButton>
-                <IconButton
-                  label="Editar"
-                  onClick={() => show({ mode: "edit", application })}
-                >
-                  <IconPencil />
-                </IconButton>
+                  <Meta application={application} />
 
-                {confirmingId === application.id ? (
-                  // Confirmação em dois passos no próprio botão, em vez de um
-                  // segundo modal por cima do primeiro.
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => remove(application.id)}
-                    className="cursor-pointer rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
-                  >
-                    {pending ? "Excluindo…" : "Confirmar?"}
-                  </button>
-                ) : (
-                  <IconButton
-                    label="Excluir"
-                    danger
-                    onClick={() => setConfirmingId(application.id)}
-                  >
-                    <IconTrash />
-                  </IconButton>
-                )}
-              </div>
+                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/5 pt-4">
+                    <StatusSelect
+                      applicationId={application.id}
+                      status={application.status}
+                      onError={setError}
+                    />
+
+                    <div className="flex items-center gap-1">
+                      <IconButton
+                        label="Ver detalhes"
+                        onClick={() => show({ mode: "view", application })}
+                      >
+                        <IconEye />
+                      </IconButton>
+                      <IconButton
+                        label="Editar"
+                        onClick={() => show({ mode: "edit", application })}
+                      >
+                        <IconPencil />
+                      </IconButton>
+
+                      {confirmingId === application.id ? (
+                        // Confirmação em dois passos no próprio botão, em vez
+                        // de um segundo modal por cima do primeiro.
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => remove(application.id)}
+                          className="cursor-pointer rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {pending ? "Excluindo…" : "Confirmar?"}
+                        </button>
+                      ) : (
+                        <IconButton
+                          label="Excluir"
+                          danger
+                          onClick={() => setConfirmingId(application.id)}
+                        >
+                          <IconTrash />
+                        </IconButton>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              </Tilt>
             </li>
           ))}
         </ul>
@@ -185,5 +213,53 @@ function IconButton({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Faixa no topo do card, na cor da etapa — a mesma linguagem dos crachás de
+ * status, para o olho achar "quais estão em entrevista" sem ler.
+ *
+ * Classes literais: o Tailwind lê o texto do fonte, e uma classe montada por
+ * template não geraria CSS nenhum.
+ */
+const statusStripe: Record<Application["status"], string> = {
+  rascunho: "bg-zinc-500",
+  aplicado: "bg-gradient-to-r from-sky-500 to-sky-300",
+  triagem: "bg-gradient-to-r from-indigo-500 to-indigo-300",
+  entrevista: "bg-gradient-to-r from-violet-500 to-fuchsia-400",
+  teste: "bg-gradient-to-r from-amber-500 to-yellow-300",
+  oferta: "bg-gradient-to-r from-emerald-500 to-teal-300",
+  rejeitado: "bg-gradient-to-r from-red-600 to-rose-400",
+};
+
+/** O que a vaga declara e ajuda a lembrar qual era: modalidade, local, nível. */
+function Meta({ application }: { application: Application }) {
+  const facts = [
+    application.job.workModel,
+    application.job.location,
+    application.job.seniority,
+  ].filter((fact): fact is string => Boolean(fact));
+
+  const sent = application.appliedAt ?? application.createdAt;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      {facts.map((fact) => (
+        <span
+          key={fact}
+          className="rounded-md border border-white/5 bg-white/5 px-2 py-0.5 capitalize text-zinc-300"
+        >
+          {fact}
+        </span>
+      ))}
+      <span className="text-zinc-500">
+        {application.appliedAt ? "enviada" : "registrada"} em{" "}
+        {new Date(sent).toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "short",
+        })}
+      </span>
+    </div>
   );
 }
