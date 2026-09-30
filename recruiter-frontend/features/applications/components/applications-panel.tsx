@@ -1,15 +1,21 @@
 "use client";
 
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Tilt } from "@/components/motion";
-
-import { useCallback, useState, useTransition } from "react";
 import { IconEye, IconPencil, IconPlus, IconTrash } from "@/components/icons";
 import { deleteApplicationAction } from "@/features/applications/actions";
 import {
   ApplicationModal,
   type ModalEntry,
 } from "@/features/applications/components/application-modal";
+import { ApplicationFiltersBar } from "@/features/applications/components/application-filters";
 import { StatusSelect } from "@/features/applications/components/status-select";
+import {
+  applyFilters,
+  EMPTY_FILTERS,
+  type ApplicationFilters,
+} from "@/features/applications/filtering";
 import { StatusSuggestionCard } from "@/features/applications/components/status-suggestion";
 import type { Application } from "@/features/applications/types";
 import type { StatusSuggestion } from "@recruit/shared";
@@ -26,6 +32,12 @@ export function ApplicationsPanel({
   applications,
   suggestions,
 }: ApplicationsPanelProps) {
+  const [filters, setFilters] = useState<ApplicationFilters>(EMPTY_FILTERS);
+  const visible = useMemo(
+    () => applyFilters(applications, filters, new Date()),
+    [applications, filters],
+  );
+
   const suggestionFor = new Map(
     suggestions.map((suggestion) => [suggestion.applicationId, suggestion]),
   );
@@ -85,93 +97,129 @@ export function ApplicationsPanel({
         </p>
       )}
 
+      {applications.length > 0 && (
+        <ApplicationFiltersBar
+          applications={applications}
+          filters={filters}
+          onChange={setFilters}
+          shown={visible.length}
+        />
+      )}
+
       {applications.length === 0 ? (
         <EmptyState onCreate={() => show({ mode: "create" })} />
+      ) : visible.length === 0 ? (
+        <div className="cine-glass flex flex-col items-center gap-3 rounded-2xl px-6 py-14 text-center">
+          <p className="text-sm text-zinc-400">
+            Nenhuma candidatura com esses filtros.
+          </p>
+          <button
+            type="button"
+            onClick={() => setFilters({ ...EMPTY_FILTERS, sort: filters.sort })}
+            className="cursor-pointer text-sm font-medium text-zinc-100 underline underline-offset-4"
+          >
+            Limpar filtros
+          </button>
+        </div>
       ) : (
         // Grade e não lista: numa tela larga a lista deixava dois terços da
         // largura vazios. Cada card entra em cascata (`cine-reveal`, no <li>)
         // e inclina com o cursor (`Tilt`, dentro dele) — em elementos
         // separados porque os dois animam `transform`, e no mesmo elemento um
         // sobrescreveria o outro.
+        //
+        // Ao filtrar e reordenar, cada card desliza até a posição nova
+        // (`layout`, num terceiro elemento, pelo mesmo motivo: `cine-reveal`
+        // mantém o `transform` da animação de entrada e venceria o do Motion).
         <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {applications.map((application, index) => (
-            <li
-              key={application.id}
-              className="cine-reveal"
-              style={{ ["--i" as string]: index }}
-            >
-              <Tilt className="h-full rounded-2xl">
-                <article className="cine-glass flex h-full flex-col gap-4 overflow-hidden rounded-2xl p-5">
-                  <span
-                    aria-hidden
-                    className={`-mx-5 -mt-5 h-1 ${statusStripe[application.status]}`}
-                  />
+          <AnimatePresence mode="popLayout" initial={false}>
+            {visible.map((application, index) => (
+              <motion.li
+                key={application.id}
+                layout
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.16 } }}
+                transition={{ type: "spring", stiffness: 380, damping: 34 }}
+              >
+                <div
+                  className="cine-reveal h-full"
+                  style={{ ["--i" as string]: index }}
+                >
+                  <Tilt className="h-full rounded-2xl">
+                    <article className="cine-glass flex h-full flex-col gap-4 overflow-hidden rounded-2xl p-5">
+                      <span
+                        aria-hidden
+                        className={`-mx-5 -mt-5 h-1 ${statusStripe[application.status]}`}
+                      />
 
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="truncate font-[family-name:var(--font-display)] text-lg font-semibold">
-                      {application.job.company}
-                    </span>
-                    <span className="line-clamp-2 text-sm text-zinc-400">
-                      {application.job.title}
-                    </span>
-                  </div>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <span className="truncate font-[family-name:var(--font-display)] text-lg font-semibold">
+                          {application.job.company}
+                        </span>
+                        <span className="line-clamp-2 text-sm text-zinc-400">
+                          {application.job.title}
+                        </span>
+                      </div>
 
-                  <Meta application={application} />
+                      <Meta application={application} />
 
-                  {suggestionFor.has(application.id) && (
-                    <StatusSuggestionCard
-                      suggestion={suggestionFor.get(application.id)!}
-                      onError={setError}
-                    />
-                  )}
-
-                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/5 pt-4">
-                    <StatusSelect
-                      applicationId={application.id}
-                      status={application.status}
-                      onError={setError}
-                    />
-
-                    <div className="flex items-center gap-1">
-                      <IconButton
-                        label="Ver detalhes"
-                        onClick={() => show({ mode: "view", application })}
-                      >
-                        <IconEye />
-                      </IconButton>
-                      <IconButton
-                        label="Editar"
-                        onClick={() => show({ mode: "edit", application })}
-                      >
-                        <IconPencil />
-                      </IconButton>
-
-                      {confirmingId === application.id ? (
-                        // Confirmação em dois passos no próprio botão, em vez
-                        // de um segundo modal por cima do primeiro.
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => remove(application.id)}
-                          className="cursor-pointer rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {pending ? "Excluindo…" : "Confirmar?"}
-                        </button>
-                      ) : (
-                        <IconButton
-                          label="Excluir"
-                          danger
-                          onClick={() => setConfirmingId(application.id)}
-                        >
-                          <IconTrash />
-                        </IconButton>
+                      {suggestionFor.has(application.id) && (
+                        <StatusSuggestionCard
+                          suggestion={suggestionFor.get(application.id)!}
+                          onError={setError}
+                        />
                       )}
-                    </div>
-                  </div>
-                </article>
-              </Tilt>
-            </li>
-          ))}
+
+                      <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/5 pt-4">
+                        <StatusSelect
+                          applicationId={application.id}
+                          status={application.status}
+                          onError={setError}
+                        />
+
+                        <div className="flex items-center gap-1">
+                          <IconButton
+                            label="Ver detalhes"
+                            onClick={() => show({ mode: "view", application })}
+                          >
+                            <IconEye />
+                          </IconButton>
+                          <IconButton
+                            label="Editar"
+                            onClick={() => show({ mode: "edit", application })}
+                          >
+                            <IconPencil />
+                          </IconButton>
+
+                          {confirmingId === application.id ? (
+                            // Confirmação em dois passos no próprio botão, em vez
+                            // de um segundo modal por cima do primeiro.
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => remove(application.id)}
+                              className="cursor-pointer rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {pending ? "Excluindo…" : "Confirmar?"}
+                            </button>
+                          ) : (
+                            <IconButton
+                              label="Excluir"
+                              danger
+                              onClick={() => setConfirmingId(application.id)}
+                            >
+                              <IconTrash />
+                            </IconButton>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  </Tilt>
+                </div>
+              </motion.li>
+            ))}
+          </AnimatePresence>
         </ul>
       )}
 
