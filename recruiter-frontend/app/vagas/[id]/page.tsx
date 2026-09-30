@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { AnswerPanel } from "@/features/answers";
 import { ApiError } from "@/features/jobs/api";
 import { JobDetail, getJob } from "@/features/jobs";
 import type { Job } from "@/features/jobs";
+import { getSelectedProfile } from "@/features/profile/current-profile";
 
 export default async function VagaPage({
   params,
@@ -24,5 +26,18 @@ export default async function VagaPage({
     throw error;
   }
 
-  return <JobDetail job={job} />;
+  const profile = await getSelectedProfile();
+
+  return (
+    <div className="flex w-full flex-col gap-6">
+      <JobDetail job={job} />
+      {/* As perguntas usam o currículo do perfil: sem perfil escolhido, o
+          gate do layout já mostra o seletor por cima. */}
+      {profile && (
+        <div className="mx-auto w-full max-w-3xl">
+          <AnswerPanel profileId={profile.id} jobId={job.id} />
+        </div>
+      )}
+    </div>
+  );
 }

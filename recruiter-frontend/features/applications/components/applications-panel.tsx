@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { Tilt } from "@/components/motion";
 import { IconEye, IconPencil, IconPlus, IconTrash } from "@/components/icons";
@@ -179,6 +180,14 @@ export function ApplicationsPanel({
                         />
 
                         <div className="flex items-center gap-1">
+                          <Link
+                            href={`/vagas/${application.job.id}#perguntas`}
+                            title="Responder perguntas do formulário"
+                            aria-label="Responder perguntas do formulário"
+                            className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                          >
+                            <IconQuestion />
+                          </Link>
                           <IconButton
                             label="Ver detalhes"
                             onClick={() => show({ mode: "view", application })}
@@ -249,6 +258,24 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         Registrar candidatura
       </button>
     </div>
+  );
+}
+
+function IconQuestion() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />
+      <path d="M6.6 5.6a1.5 1.5 0 1 1 2 1.4c-.4.2-.6.5-.6.9M8 9.2v.1" />
+    </svg>
   );
 }
 
