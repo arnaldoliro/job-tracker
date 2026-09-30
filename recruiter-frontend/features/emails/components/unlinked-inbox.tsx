@@ -14,6 +14,7 @@ import {
   syncEmailsAction,
   type SyncState,
 } from "@/features/emails/actions";
+import { LinkMenu } from "@/features/emails/components/link-menu";
 
 /**
  * Os emails que chegaram e não deu para dizer de qual candidatura são.
@@ -272,34 +273,22 @@ function EmailCard({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="cursor-pointer rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            className="cursor-pointer rounded-lg bg-gradient-to-r from-accent to-accent-2 px-3 py-1.5 text-sm font-semibold text-zinc-950 shadow-[0_6px_20px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98]"
           >
             Criar candidatura
           </button>
 
           {applications.length > 0 && (
-            <select
-              defaultValue=""
+            <LinkMenu
+              applications={applications}
               disabled={pending}
-              onChange={(event) => {
-                const value = event.target.value;
-
-                if (value) {
-                  run(
-                    () => linkEmailAction(email.id, value),
-                    "Vinculado à candidatura.",
-                  );
-                }
-              }}
-              className="cursor-pointer rounded-lg border border-zinc-300 bg-transparent px-3 py-1.5 text-sm outline-none dark:border-zinc-700"
-            >
-              <option value="">Vincular a uma candidatura…</option>
-              {applications.map((application) => (
-                <option key={application.id} value={application.id}>
-                  {application.job.company} — {application.job.title}
-                </option>
-              ))}
-            </select>
+              onChoose={(applicationId) =>
+                run(
+                  () => linkEmailAction(email.id, applicationId),
+                  "Vinculado à candidatura.",
+                )
+              }
+            />
           )}
         </div>
       )}
