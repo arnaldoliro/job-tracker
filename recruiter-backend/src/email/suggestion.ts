@@ -16,13 +16,21 @@ export interface SuggestionFacts {
   suggested: ApplicationStatus;
   receivedAt: Date;
   current: ApplicationStatus;
-  /**
-   * A última TRANSIÇÃO da candidatura — evento com `fromStatus`. O evento de
-   * criação não conta: registrar a candidatura depois de receber a recusa é
-   * a ordem comum, e não quer dizer que você leu a recusa.
-   */
-  lastTransitionAt: Date | null;
+  /** Todos os eventos de status da candidatura, em qualquer ordem. */
+  events: { toStatus: ApplicationStatus; occurredAt: Date }[];
 }
+
+/**
+ * Status que só existem porque a empresa respondeu. Chegar a `rascunho` ou
+ * `aplicado` é VOCÊ registrando a candidatura, e não reação a email nenhum.
+ */
+const RESPONSE: ReadonlySet<ApplicationStatus> = new Set([
+  'triagem',
+  'entrevista',
+  'teste',
+  'oferta',
+  'rejeitado',
+]);
 
 export function isActionable(facts: SuggestionFacts): boolean {
   if (facts.suggested === facts.current) {
@@ -34,8 +42,19 @@ export function isActionable(facts: SuggestionFacts): boolean {
     return false;
   }
 
-  // Você mexeu no status depois que o email chegou: já leu a notícia.
-  if (facts.lastTransitionAt && facts.lastTransitionAt >= facts.receivedAt) {
+  // Você registrou uma resposta da empresa depois que o email chegou: já leu
+  // a notícia.
+  //
+  // Só resposta conta. Marcar como `aplicado` logo depois de o email chegar é
+  // a ordem normal — candidatou-se, a plataforma respondeu na hora, você
+  // registrou em seguida —, e tratar isso como "já leu" escondia justamente
+  // a primeira notícia de toda candidatura.
+  const answeredAfter = facts.events.some(
+    (event) =>
+      RESPONSE.has(event.toStatus) && event.occurredAt >= facts.receivedAt,
+  );
+
+  if (answeredAfter) {
     return false;
   }
 

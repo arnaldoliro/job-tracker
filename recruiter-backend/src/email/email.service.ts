@@ -241,20 +241,34 @@ export class EmailService {
     receivedAt: Date;
     bodyText: string | null;
     references: string[];
+    senderVerified: boolean;
   }): Promise<'stored' | 'linked' | 'skipped'> {
     // Global, e não pelo `@@unique([profileId, messageId])`: aquele índice é
     // por perfil, e o mesmo email entraria duas vezes se o perfil de espera
     // mudasse entre execuções.
     const known = await this.prisma.emailMessage.findFirst({
       where: { messageId: mail.messageId },
-      select: { id: true },
+      select: { id: true, senderVerified: true },
     });
 
     if (known) {
+      // Email guardado antes de a verificação existir: a releitura é a
+      // chance de descobrir. Sem isto ele ficaria "não se sabe" para sempre,
+      // porque a deduplicação pula antes de qualquer outra coisa.
+      if (known.senderVerified === null) {
+        await this.prisma.emailMessage.update({
+          where: { id: known.id },
+          data: { senderVerified: mail.senderVerified },
+        });
+      }
+
       return 'skipped';
     }
 
-    const match = await this.findApplication(mail);
+    // Remetente não confirmado não é vinculado sozinho: é o vínculo que
+    // manda o email para o modelo. Ele fica na caixa de não vinculados, com
+    // o aviso, e você decide.
+    const match = mail.senderVerified ? await this.findApplication(mail) : null;
     const profileId = match
       ? match.profileId
       : await this.placeholderProfile(mail.fromAddress);
@@ -271,6 +285,7 @@ export class EmailService {
           subject: mail.subject,
           receivedAt: mail.receivedAt,
           bodyText: mail.bodyText,
+          senderVerified: mail.senderVerified,
           // `processedAt` fica nulo: ele significa "o job de classificação
           // rodou", e ele não rodou. Marcar aqui roubaria a fila da etapa de IA.
         },
@@ -364,6 +379,7 @@ export class EmailService {
     const orphans = await this.prisma.emailMessage.findMany({
       where: {
         applicationId: null,
+        senderVerified: true,
         receivedAt: { gte: daysAgo(RELINK_DAYS) },
         // Digest de vagas nunca é correspondência de candidatura. Sem isto, um
         // alerta citando seis empresas pode casar com uma delas e entrar na
@@ -479,6 +495,7 @@ export class EmailService {
             row.fromAddress,
             row.subject,
           ),
+          senderVerified: row.senderVerified === true,
         }))
         // Rede de segurança: um remetente de alerta que ainda não esteja na
         // lista cai aqui pelo texto.
@@ -529,8 +546,9 @@ export class EmailService {
   /**
    * Lê os emails vinculados que ainda não foram lidos.
    *
-   * Só VINCULADOS, e isso é o filtro da seção 4: um email só chega aqui se
-   * entrou pelo rótulo do Gmail e casou com uma candidatura sua. A caixa
+   * Só VINCULADOS e de remetente CONFIRMADO, e isso é o filtro da seção 4:
+   * um email só chega aqui se entrou pelo rótulo do Gmail, casou com uma
+   * candidatura sua e o servidor atestou quem o enviou. A caixa
    * inteira nunca sai da máquina, e os alertas de vaga também não — digest
    * não é notícia de processo nenhum.
    */
@@ -545,6 +563,9 @@ export class EmailService {
       const pending = await this.prisma.emailMessage.findMany({
         where: {
           processedAt: null,
+          // Vale também para o email que VOCÊ vinculou à mão: o vínculo diz a
+          // qual candidatura ele pertence, não que o texto dele é confiável.
+          senderVerified: true,
           fromAddress: { notIn: [...JOB_DIGEST_SENDERS] },
           application: { is: active },
         },
@@ -653,10 +674,7 @@ export class EmailService {
           select: {
             status: true,
             statusEvents: {
-              where: { fromStatus: { not: null } },
-              orderBy: { occurredAt: 'desc' },
-              take: 1,
-              select: { occurredAt: true },
+              select: { toStatus: true, occurredAt: true },
             },
           },
         },
@@ -670,7 +688,7 @@ export class EmailService {
         applicationId: row.applicationId!,
         suggested: row.suggestedStatus!,
         current: row.application!.status,
-        lastTransitionAt: row.application!.statusEvents[0]?.occurredAt ?? null,
+        events: row.application!.statusEvents,
       })),
     );
 

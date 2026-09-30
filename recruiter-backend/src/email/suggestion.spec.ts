@@ -20,7 +20,7 @@ function fato(
     suggested,
     current,
     receivedAt: EMAIL,
-    lastTransitionAt: null,
+    events: [],
     ...extra,
   };
 }
@@ -39,15 +39,38 @@ describe('isActionable', () => {
     expect(isActionable(fato('entrevista', 'rejeitado'))).toBe(false);
   });
 
-  it('some quando você mudou o status depois do email', () => {
+  it('some quando você registrou uma resposta depois do email', () => {
     expect(
-      isActionable(fato('rejeitado', 'triagem', { lastTransitionAt: DEPOIS })),
+      isActionable(
+        fato('rejeitado', 'triagem', {
+          events: [{ toStatus: 'triagem', occurredAt: DEPOIS }],
+        }),
+      ),
     ).toBe(false);
   });
 
-  it('continua quando a última mudança foi antes do email', () => {
+  it('continua quando a última resposta registrada foi antes do email', () => {
     expect(
-      isActionable(fato('rejeitado', 'triagem', { lastTransitionAt: ANTES })),
+      isActionable(
+        fato('rejeitado', 'triagem', {
+          events: [{ toStatus: 'triagem', occurredAt: ANTES }],
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('marcar como aplicado depois do email não é "já li a notícia"', () => {
+    // O caso real: a plataforma respondeu na hora e a candidatura foi
+    // registrada 31 segundos depois. A sugestão sumia.
+    expect(
+      isActionable(
+        fato('teste', 'aplicado', {
+          events: [
+            { toStatus: 'rascunho', occurredAt: DEPOIS },
+            { toStatus: 'aplicado', occurredAt: DEPOIS },
+          ],
+        }),
+      ),
     ).toBe(true);
   });
 

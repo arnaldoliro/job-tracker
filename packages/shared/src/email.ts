@@ -39,6 +39,14 @@ export const emailMessageSchema = z.object({
   preview: z.string().nullable(),
   /** A empresa que o texto sugere, quando dá para deduzir. */
   companyGuess: z.string().nullable(),
+  /**
+   * O servidor de email confirmou que o remetente é quem diz ser.
+   *
+   * Falso não quer dizer golpe — quer dizer que não dá para afirmar. Um email
+   * assim não é vinculado sozinho nem lido pelo modelo; fica para você
+   * decidir, e a tela avisa.
+   */
+  senderVerified: z.boolean(),
 });
 
 export type EmailMessage = z.infer<typeof emailMessageSchema>;

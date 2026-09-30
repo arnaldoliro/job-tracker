@@ -204,6 +204,17 @@ function EmailCard({
         </p>
       )}
 
+      {!email.senderVerified && (
+        // Não é acusação de golpe: é o que o app não conseguiu confirmar. O
+        // "De" de um email é texto livre, e só o servidor sabe se é verdade.
+        <p className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200">
+          Remetente não confirmado. O servidor de email não atestou que esta
+          mensagem veio mesmo de {email.fromAddress.split("@").pop()}, então
+          ela não foi vinculada sozinha nem lida pela IA. Confira no Gmail
+          antes de vincular.
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {error}

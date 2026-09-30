@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ImapFlow, type FetchMessageObject } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { isSenderVerified } from './sender-auth';
 
 /**
  * Transporte: conecta, lê o rótulo, devolve objetos simples. Não conhece
@@ -43,6 +44,8 @@ export interface FetchedMail {
   receivedAt: Date;
   bodyText: string | null;
   references: string[];
+  /** O servidor confirmou o remetente. Ver `sender-auth.ts`. */
+  senderVerified: boolean;
 }
 
 /** Mensagem acima disto entra sem corpo, em vez de ficar de fora. */
@@ -111,6 +114,9 @@ export async function fetchSince(
         internalDate: true,
         size: true,
         threadId: true,
+        // Só este cabeçalho, e junto do envelope: vale também para o email
+        // grande demais para ter o corpo baixado.
+        headers: ['authentication-results'],
       },
     )) {
       envelopes.push(message);
@@ -210,6 +216,10 @@ async function readOne(
     receivedAt,
     bodyText,
     references,
+    senderVerified: isSenderVerified(
+      message.headers?.toString('utf8'),
+      fromAddress,
+    ),
   };
 }
 
