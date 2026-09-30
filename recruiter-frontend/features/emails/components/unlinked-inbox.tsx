@@ -1,20 +1,21 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { RESOLVE_BATCH } from "@recruit/shared";
 import type {
   Application,
-  EmailKind,
   EmailMessage,
+  EmailResolution,
   EmailStatus,
 } from "@recruit/shared";
 import { IconMail } from "@/components/icons";
 import {
-  createFromEmailAction,
-  linkEmailAction,
+  resolveEmailsAction,
   syncEmailsAction,
   type SyncState,
 } from "@/features/emails/actions";
-import { LinkMenu } from "@/features/emails/components/link-menu";
+import { EmailCard } from "@/features/emails/components/email-card";
+import { ResolvePanel } from "@/features/emails/components/resolve-panel";
 
 /**
  * Os emails que chegaram e não deu para dizer de qual candidatura são.
@@ -23,7 +24,9 @@ import { LinkMenu } from "@/features/emails/components/link-menu";
  * perfis. Filtrar aqui esconderia email de um perfil enquanto você estivesse
  * em outro, e você nunca saberia que ele existe.
  *
- * Nada acontece sozinho — vincular e criar candidatura são cliques seus.
+ * Nada acontece sozinho. Vincular, criar e remover são cliques seus; a IA
+ * só entra quando você seleciona emails e pede, e mesmo aí ela propõe um
+ * plano que você confere antes de aplicar.
  */
 
 interface UnlinkedInboxProps {
@@ -33,21 +36,6 @@ interface UnlinkedInboxProps {
   status: EmailStatus;
 }
 
-const kindLabel: Record<EmailKind, string> = {
-  confirmacao: "confirmação de candidatura",
-  atualizacao: "atualização do processo",
-  alerta: "alerta de vagas",
-  desconhecido: "não identificado",
-};
-
-const kindTone: Record<EmailKind, string> = {
-  confirmacao:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-  atualizacao: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
-  alerta: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  desconhecido: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-};
-
 export function UnlinkedInbox({
   profileId,
   emails,
@@ -55,12 +43,66 @@ export function UnlinkedInbox({
   status,
 }: UnlinkedInboxProps) {
   const [sync, setSync] = useState<SyncState>({ status: "idle" });
-  const [pending, startTransition] = useTransition();
+  const [syncing, startSync] = useTransition();
+  const [resolving, startResolve] = useTransition();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [plan, setPlan] = useState<EmailResolution[] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const run = () =>
-    startTransition(async () => {
+  // A lista muda por baixo (sincronização, vínculo): só conta o que ainda
+  // está na tela.
+  const present = emails.filter((email) => selected.has(email.id));
+  const allSelected = emails.length > 0 && present.length === emails.length;
+  const tooMany = present.length > RESOLVE_BATCH;
+
+  const runSync = () =>
+    startSync(async () => {
       setSync(await syncEmailsAction());
     });
+
+  const toggle = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+
+      if (!next.delete(id)) {
+        next.add(id);
+      }
+
+      return next;
+    });
+
+  const drop = (id: string) =>
+    setSelected((current) => {
+      if (!current.has(id)) {
+        return current;
+      }
+
+      const next = new Set(current);
+
+      next.delete(id);
+
+      return next;
+    });
+
+  const resolve = () => {
+    setError(null);
+    setNotice(null);
+    startResolve(async () => {
+      const outcome = await resolveEmailsAction(
+        profileId,
+        present.map((email) => email.id),
+      );
+
+      if (outcome.status === "error") {
+        setError(outcome.message);
+
+        return;
+      }
+
+      setPlan(outcome.plan);
+    });
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-[110rem] flex-col gap-5">
@@ -76,12 +118,12 @@ export function UnlinkedInbox({
 
         <button
           type="button"
-          onClick={run}
-          disabled={pending || !status.configured}
+          onClick={runSync}
+          disabled={syncing || !status.configured}
           className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
         >
           <IconMail />
-          {pending ? "Sincronizando…" : "Sincronizar agora"}
+          {syncing ? "Sincronizando…" : "Sincronizar agora"}
         </button>
       </header>
 
@@ -92,25 +134,97 @@ export function UnlinkedInbox({
           do backend, com uma app password — nunca a senha principal da conta.
         </p>
       ) : (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-zinc-400">
           Lendo o rótulo <code>{status.mailbox}</code> do Gmail.
         </p>
       )}
 
       {sync.status === "error" && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-sm text-red-400">
           {sync.message}
         </p>
       )}
 
       {sync.status === "success" && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-zinc-400">
           {sync.result.fetched} lidos · {sync.result.stored} novos ·{" "}
           {sync.result.linked} vinculados · {sync.result.relinked} revinculados
           {sync.result.classified > 0 &&
             ` · ${sync.result.classified} lidos pela IA`}
           {sync.result.failed.length > 0 &&
             ` · ${sync.result.failed.length} falharam`}
+        </p>
+      )}
+
+      {notice && (
+        <p
+          role="status"
+          className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-3 text-sm text-emerald-200"
+        >
+          {notice}
+        </p>
+      )}
+
+      {plan ? (
+        <ResolvePanel
+          // Um plano novo é um painel novo: marcações e edições do anterior
+          // não podem vazar para este.
+          key={plan.map((item) => item.emailId).join(",")}
+          profileId={profileId}
+          plan={plan}
+          emails={emails}
+          onClose={() => setPlan(null)}
+          onApplied={(message) => {
+            setPlan(null);
+            setSelected(new Set());
+            setNotice(message);
+          }}
+        />
+      ) : (
+        emails.length > 0 && (
+          <div className="cine-glass flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-5 py-3">
+            <button
+              type="button"
+              onClick={() =>
+                setSelected(
+                  allSelected
+                    ? new Set()
+                    : new Set(emails.map((email) => email.id)),
+                )
+              }
+              className="cursor-pointer text-sm font-medium text-zinc-200 underline underline-offset-4 transition hover:text-white"
+            >
+              {allSelected ? "Limpar seleção" : "Selecionar todos"}
+            </button>
+
+            <span className="text-sm text-zinc-400">
+              {present.length === 0
+                ? "Selecione emails para a IA resolver."
+                : `${present.length} ${present.length === 1 ? "selecionado" : "selecionados"}`}
+            </span>
+
+            <button
+              type="button"
+              onClick={resolve}
+              disabled={resolving || present.length === 0 || tooMany}
+              className="ml-auto flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+            >
+              <SparkIcon />
+              {resolving ? "A IA está lendo…" : "Resolver por IA"}
+            </button>
+
+            <p className="w-full text-xs leading-relaxed text-zinc-500">
+              {tooMany
+                ? `No máximo ${RESOLVE_BATCH} emails por vez — cada um é uma leitura paga.`
+                : "A IA lê só os emails selecionados e propõe o que fazer com cada um: vincular a uma candidatura, atualizar o status ou criar a candidatura. Nada muda antes de você conferir e aplicar. Emails não identificados ficam de fora."}
+            </p>
+          </div>
+        )
+      )}
+
+      {error && (
+        <p role="alert" className="text-sm text-red-400">
+          {error}
         </p>
       )}
 
@@ -127,6 +241,9 @@ export function UnlinkedInbox({
               profileId={profileId}
               email={email}
               applications={applications}
+              selected={selected.has(email.id)}
+              onToggle={() => toggle(email.id)}
+              onGone={() => drop(email.id)}
             />
           ))}
         </ul>
@@ -135,172 +252,10 @@ export function UnlinkedInbox({
   );
 }
 
-function EmailCard({
-  index,
-  profileId,
-  email,
-  applications,
-}: {
-  /** Posição na lista, para a cascata de entrada. Sem inclinação aqui: o card
-      tem select e formulário, e um alvo que balança sob o cursor erra clique. */
-  index: number;
-  profileId: string;
-  email: EmailMessage;
-  applications: Application[];
-}) {
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [company, setCompany] = useState(email.companyGuess ?? "");
-  const [title, setTitle] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  const run = (action: () => Promise<{ status: string; message?: string }>, ok: string) => {
-    setError(null);
-    startTransition(async () => {
-      const outcome = await action();
-
-      if (outcome.status === "error") {
-        setError(outcome.message ?? "Algo deu errado.");
-
-        return;
-      }
-
-      setDone(ok);
-    });
-  };
-
-  if (done) {
-    return (
-      <li className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-zinc-400">
-        {done}
-      </li>
-    );
-  }
-
+function SparkIcon() {
   return (
-    <li
-      className="cine-reveal cine-glass flex flex-col gap-3 rounded-2xl p-5"
-      style={{ ["--i" as string]: index }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          {/* Assunto e remetente são texto de terceiro: vão como texto. */}
-          <span className="text-sm font-medium">{email.subject}</span>
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            {email.fromName ? `${email.fromName} · ` : ""}
-            {email.fromAddress} · {formatDate(email.receivedAt)}
-          </span>
-        </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${kindTone[email.kind]}`}
-        >
-          {kindLabel[email.kind]}
-        </span>
-      </div>
-
-      {email.preview && (
-        <p className="line-clamp-2 text-sm text-zinc-500 dark:text-zinc-400">
-          {email.preview}
-        </p>
-      )}
-
-      {!email.senderVerified && (
-        // Não é acusação de golpe: é o que o app não conseguiu confirmar. O
-        // "De" de um email é texto livre, e só o servidor sabe se é verdade.
-        <p className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200">
-          Remetente não confirmado. O servidor de email não atestou que esta
-          mensagem veio mesmo de {email.fromAddress.split("@").pop()}, então
-          ela não foi vinculada sozinha nem lida pela IA. Confira no Gmail
-          antes de vincular.
-        </p>
-      )}
-
-      {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      )}
-
-      {creating ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Confira antes de registrar — empresa e cargo são um palpite do texto
-            do email.
-          </p>
-          <input
-            value={company}
-            onChange={(event) => setCompany(event.target.value)}
-            placeholder="Empresa"
-            className="rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-100"
-          />
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Cargo"
-            className="rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-100"
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={pending || !company.trim() || !title.trim()}
-              onClick={() =>
-                run(
-                  () =>
-                    createFromEmailAction(email.id, {
-                      profileId,
-                      company: company.trim(),
-                      title: title.trim(),
-                    }),
-                  "Candidatura criada a partir deste email.",
-                )
-              }
-              className="cursor-pointer rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              {pending ? "Criando…" : "Registrar candidatura"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreating(false)}
-              className="cursor-pointer rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="cursor-pointer rounded-lg bg-gradient-to-r from-accent to-accent-2 px-3 py-1.5 text-sm font-semibold text-zinc-950 shadow-[0_6px_20px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98]"
-          >
-            Criar candidatura
-          </button>
-
-          {applications.length > 0 && (
-            <LinkMenu
-              applications={applications}
-              disabled={pending}
-              onChoose={(applicationId) =>
-                run(
-                  () => linkEmailAction(email.id, applicationId),
-                  "Vinculado à candidatura.",
-                )
-              }
-            />
-          )}
-        </div>
-      )}
-    </li>
+    <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="currentColor">
+      <path d="M8 1.5l1.3 3.9a1.5 1.5 0 0 0 .95.95L14.2 7.6l-3.95 1.3a1.5 1.5 0 0 0-.95.95L8 13.8l-1.3-3.95a1.5 1.5 0 0 0-.95-.95L1.8 7.6l3.95-1.25a1.5 1.5 0 0 0 .95-.95z" />
+    </svg>
   );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

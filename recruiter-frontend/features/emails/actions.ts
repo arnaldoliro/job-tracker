@@ -1,13 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createApplicationFromEmailSchema } from "@recruit/shared";
-import type { EmailSyncResult } from "@recruit/shared";
+import {
+  applyResolutionsSchema,
+  createApplicationFromEmailSchema,
+  resolveEmailsSchema,
+} from "@recruit/shared";
+import type {
+  ApplyResolutionsResult,
+  EmailResolution,
+  EmailSyncResult,
+} from "@recruit/shared";
 import {
   ApiError,
+  applyResolutions,
   createApplicationFromEmail,
+  dismissEmail,
   linkEmail,
+  resolveEmails,
   syncEmails,
+  undismissEmail,
 } from "@/features/emails/api";
 
 export type EmailActionState =
@@ -82,5 +94,89 @@ export async function createFromEmailAction(
     return { status: "success" };
   } catch (error) {
     return toError(error, "Não consegui criar a candidatura.");
+  }
+}
+
+/**
+ * Tira o email da tela. Sem `revalidatePath` de propósito: o card vira uma
+ * linha com "Desfazer" ali mesmo, e recarregar a lista o faria sumir antes
+ * de dar tempo de desfazer um clique errado.
+ */
+export async function dismissEmailAction(id: string): Promise<EmailActionState> {
+  try {
+    await dismissEmail(id);
+
+    return { status: "success" };
+  } catch (error) {
+    return toError(error, "Não consegui remover o email.");
+  }
+}
+
+export async function undismissEmailAction(
+  id: string,
+): Promise<EmailActionState> {
+  try {
+    await undismissEmail(id);
+
+    return { status: "success" };
+  } catch (error) {
+    return toError(error, "Não consegui desfazer.");
+  }
+}
+
+export type ResolveState =
+  | { status: "error"; message: string }
+  | { status: "success"; plan: EmailResolution[] };
+
+/**
+ * Pede à IA um plano para os emails escolhidos. Só leitura: a lista não é
+ * revalidada porque nada mudou — o plano ainda vai passar pelo seu clique.
+ */
+export async function resolveEmailsAction(
+  profileId: string,
+  emailIds: string[],
+): Promise<ResolveState> {
+  const parsed = resolveEmailsSchema.safeParse({ profileId, emailIds });
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: `Selecione de 1 a 20 emails por vez.`,
+    };
+  }
+
+  try {
+    return { status: "success", plan: await resolveEmails(parsed.data) };
+  } catch (error) {
+    return toError(error, "Não consegui consultar a IA agora.");
+  }
+}
+
+export type ApplyState =
+  | { status: "error"; message: string }
+  | { status: "success"; result: ApplyResolutionsResult };
+
+export async function applyResolutionsAction(
+  input: unknown,
+): Promise<ApplyState> {
+  const parsed = applyResolutionsSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "Plano inválido.",
+    };
+  }
+
+  try {
+    const result = await applyResolutions(parsed.data);
+
+    revalidatePath("/emails");
+    revalidatePath("/");
+    revalidatePath("/metricas");
+
+    return { status: "success", result };
+  } catch (error) {
+    return toError(error, "Não consegui aplicar o plano.");
   }
 }

@@ -1,13 +1,21 @@
 import "server-only";
 import {
   applicationSchema,
+  applyResolutionsResultSchema,
+  applyResolutionsSchema,
   emailMessageListSchema,
+  emailResolutionListSchema,
+  resolveEmailsSchema,
   emailStatusSchema,
   emailSyncResultSchema,
 } from "@recruit/shared";
 import type {
   Application,
+  ApplyResolutionsInput,
+  ApplyResolutionsResult,
   CreateApplicationFromEmailInput,
+  EmailResolution,
+  ResolveEmailsInput,
   EmailMessage,
   EmailStatus,
   EmailSyncResult,
@@ -82,6 +90,43 @@ export async function createApplicationFromEmail(
     await request(`/emails/${id}/application`, {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+  );
+}
+
+/** Tira o email da tela de pendentes. Não apaga: dá para desfazer. */
+export async function dismissEmail(id: string): Promise<void> {
+  await request(`/emails/${encodeURIComponent(id)}/dismiss`, {
+    method: "POST",
+  });
+}
+
+export async function undismissEmail(id: string): Promise<void> {
+  await request(`/emails/${encodeURIComponent(id)}/dismiss`, {
+    method: "DELETE",
+  });
+}
+
+/** Pede o plano ao modelo. Não grava nada. */
+export async function resolveEmails(
+  input: ResolveEmailsInput,
+): Promise<EmailResolution[]> {
+  return emailResolutionListSchema.parse(
+    await request("/emails/resolve", {
+      method: "POST",
+      body: JSON.stringify(resolveEmailsSchema.parse(input)),
+    }),
+  );
+}
+
+/** Executa os itens do plano que você aprovou. */
+export async function applyResolutions(
+  input: ApplyResolutionsInput,
+): Promise<ApplyResolutionsResult> {
+  return applyResolutionsResultSchema.parse(
+    await request("/emails/resolve/apply", {
+      method: "POST",
+      body: JSON.stringify(applyResolutionsSchema.parse(input)),
     }),
   );
 }
