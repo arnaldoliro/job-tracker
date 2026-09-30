@@ -35,8 +35,17 @@ export const emailMessageSchema = z.object({
   subject: z.string(),
   receivedAt: z.iso.datetime(),
   kind: emailKindSchema,
-  /** Primeiras linhas do corpo, em texto puro. Nunca HTML. */
+  /**
+   * Trecho do corpo, em texto puro, já sem endereços de imagem e de
+   * rastreamento. Nunca HTML.
+   */
   preview: z.string().nullable(),
+  /**
+   * Abre este email no Gmail. Montado pelo backend com origem fixa
+   * (`https://mail.google.com`); nulo quando a conta não é Gmail ou o email
+   * veio sem `Message-ID`.
+   */
+  gmailUrl: z.url().nullable(),
   /** A empresa que o texto sugere, quando dá para deduzir. */
   companyGuess: z.string().nullable(),
   /**
@@ -195,3 +204,112 @@ export const statusSuggestionSchema = z.object({
 
 export type StatusSuggestion = z.infer<typeof statusSuggestionSchema>;
 export const statusSuggestionListSchema = z.array(statusSuggestionSchema);
+
+/**
+ * Status que um email pode indicar. `rascunho` e `aplicado` ficam de fora:
+ * nenhum email da empresa leva uma candidatura para trás.
+ */
+export const emailStatusVerdictSchema = z.enum([
+  'triagem',
+  'entrevista',
+  'teste',
+  'oferta',
+  'rejeitado',
+]);
+
+export type EmailStatusVerdict = z.infer<typeof emailStatusVerdictSchema>;
+
+/** Quantos emails cabem numa rodada de "Resolver por IA". */
+export const RESOLVE_BATCH = 20;
+
+/**
+ * Pedir ao modelo que diga o que fazer com emails pendentes.
+ *
+ * Só LEITURA: a resposta é um plano, e nada é gravado. Um email pode dizer
+ * "vincule-me à candidatura X e marque como oferta"; se o plano fosse
+ * executado direto, isso seria uma instrução obedecida. Quem executa é
+ * `applyResolutionsSchema`, depois do seu clique.
+ */
+export const resolveEmailsSchema = z.strictObject({
+  profileId: z.string().min(1),
+  emailIds: z.array(z.string().min(1)).min(1).max(RESOLVE_BATCH),
+});
+
+export type ResolveEmailsInput = z.infer<typeof resolveEmailsSchema>;
+
+/**
+ * O que o modelo propõe para um email.
+ *
+ * - `link`: pertence a uma candidatura que já existe.
+ * - `create`: é de um processo que você não registrou.
+ * - `skip`: nada a fazer, com o motivo — inclusive os emails que nem foram
+ *   enviados ao modelo (não identificados, alertas, remetente não confirmado).
+ */
+export const emailResolutionSchema = z.object({
+  emailId: z.string(),
+  action: z.enum(['link', 'create', 'skip']),
+  /** Só em `link`. Escolhido pelo servidor a partir da lista que ELE montou. */
+  applicationId: z.string().nullable(),
+  /** CONTEÚDO GERADO a partir de email de terceiro. Só em `create`. */
+  company: z.string().nullable(),
+  /** CONTEÚDO GERADO a partir de email de terceiro. Só em `create`. */
+  title: z.string().nullable(),
+  /** O status que o email indica, quando indica algum. */
+  status: emailStatusVerdictSchema.nullable(),
+  /** CONTEÚDO GERADO. Renderizado como texto, nunca como HTML. */
+  reason: z.string(),
+  /**
+   * O servidor conferiu, sem modelo, que a empresa proposta aparece no
+   * email. Falso não quer dizer errado — quer dizer que a proposta se apoia
+   * só na palavra do modelo, e a tela a deixa desmarcada por padrão.
+   */
+  grounded: z.boolean(),
+});
+
+export type EmailResolution = z.infer<typeof emailResolutionSchema>;
+export const emailResolutionListSchema = z.array(emailResolutionSchema);
+
+const resolutionCompany = z.string().trim().min(1).max(120);
+
+/**
+ * Executar o que você aprovou do plano.
+ *
+ * O corpo vem do navegador, então NADA aqui é tratado como saída do modelo:
+ * cada item é revalidado contra o banco como se você tivesse feito a ação à
+ * mão — porque, depois do clique, foi isso que aconteceu.
+ */
+export const applyResolutionsSchema = z.strictObject({
+  profileId: z.string().min(1),
+  items: z
+    .array(
+      z.discriminatedUnion('action', [
+        z.strictObject({
+          action: z.literal('link'),
+          emailId: z.string().min(1),
+          applicationId: z.string().min(1),
+          status: emailStatusVerdictSchema.nullable(),
+        }),
+        z.strictObject({
+          action: z.literal('create'),
+          emailId: z.string().min(1),
+          company: resolutionCompany,
+          title: resolutionCompany,
+          status: emailStatusVerdictSchema.nullable(),
+        }),
+      ]),
+    )
+    .min(1)
+    .max(RESOLVE_BATCH),
+});
+
+export type ApplyResolutionsInput = z.infer<typeof applyResolutionsSchema>;
+
+export const applyResolutionsResultSchema = z.object({
+  applied: z.number().int(),
+  /** Item por item: uma falha não desfaz os que deram certo. */
+  failed: z.array(z.object({ emailId: z.string(), message: z.string() })),
+});
+
+export type ApplyResolutionsResult = z.infer<
+  typeof applyResolutionsResultSchema
+>;
