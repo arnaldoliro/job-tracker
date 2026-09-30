@@ -341,6 +341,11 @@ model EmailMessage {
   /// Você confirmou ou dispensou. A partir daqui a sugestão não aparece mais.
   suggestionResolvedAt DateTime?
 
+  /// Você tirou este email da tela de pendentes. A linha fica: apagar faria a
+  /// próxima sincronização trazê-lo de volta como novo, e o "desfazer" não
+  /// teria o que restaurar. Descartado não é revinculado sozinho.
+  dismissedAt DateTime?
+
   createdAt DateTime @default(now())
 
   profile     Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)

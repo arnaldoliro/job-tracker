@@ -40,6 +40,13 @@ cada email à candidatura certa e monta a linha do tempo de cada processo. Um
 email de confirmação de uma vaga que você esqueceu de registrar vira a
 candidatura com um clique.
 
+**Resolver por IA.** Na tela de emails, selecione os pendentes e peça: o
+Claude diz, para cada um, se pertence a uma candidatura que já existe, se é
+de uma que você não registrou, e que status o email indica. Volta um plano;
+você confere, desmarca o que discordar e aplica. Emails que o app não
+reconhece como de candidatura, alertas de vaga e remetentes não confirmados
+nunca são enviados ao modelo.
+
 **Sugestão de status.** O Claude lê os emails já vinculados e, quando um deles
 é uma recusa, um convite para entrevista, um teste ou uma proposta, o card da
 candidatura mostra a sugestão com o motivo. Nada muda até você confirmar.
@@ -69,7 +76,9 @@ a própria caixa não é raspagem. O parser lê os alertas; a página da vaga nu
 **O modelo sugere, você decide.** "Seguimos com outros candidatos" e
 "gostaríamos de seguir com você" são quase a mesma frase com sentidos opostos.
 A leitura do email vira uma sugestão no card, com o motivo ao lado, e o status
-só muda no seu clique. Só emails vinculados a uma candidatura vão para a API —
+só muda no seu clique. No "Resolver por IA" vale o mesmo: o modelo escolhe a
+candidatura por número, numa lista que o servidor montou, e o servidor confere
+se a empresa aparece de fato no email — proposta sem esse apoio vem desmarcada. Só emails vinculados a uma candidatura vão para a API —
 a caixa de entrada nunca sai da máquina.
 
 **O "De" de um email não prova nada.** Qualquer um escreve

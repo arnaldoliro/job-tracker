@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -8,8 +9,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type {
   Application,
+  ApplyResolutionsInput,
+  ApplyResolutionsResult,
   CreateApplicationFromEmailInput,
   EmailMessage,
+  EmailResolution,
+  EmailStatusVerdict,
   EmailStatus,
   EmailSyncResult,
   StatusSuggestion,
@@ -19,12 +24,14 @@ import { active } from '../application/active';
 import { ApplicationService } from '../application/application.service';
 import type { Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
-import { JOB_DIGEST_SENDERS } from './ats';
+import { isJobDigestSender, JOB_DIGEST_SENDERS } from './ats';
 import { classify, companyGuess } from './confirmation';
 import {
   ClassifierUnavailableError,
   EmailClassifierService,
 } from './email-classifier.service';
+import { EmailResolverService } from './email-resolver.service';
+import { excerpt, gmailUrl } from './email-text';
 import { fetchSince, ImapError, type ImapConfig } from './imap.client';
 import {
   matchByCompany,
@@ -32,6 +39,11 @@ import {
   type Candidate,
   type MailFacts,
 } from './matcher';
+import {
+  MAX_LISTED,
+  toResolution,
+  type ListedApplication,
+} from './resolve-plan';
 import { pickSuggestions } from './suggestion';
 
 /**
@@ -51,7 +63,11 @@ const OVERLAP_DAYS = 1;
 /** Órfão mais velho que isto não vale mais tentar revincular. */
 const RELINK_DAYS = 90;
 
-const PREVIEW_CHARS = 220;
+/** O bastante para o card dizer do que o email trata sem abrir o Gmail. */
+const PREVIEW_CHARS = 420;
+
+/** Chamadas simultâneas ao modelo em "Resolver por IA". */
+const RESOLVE_PARALLEL = 4;
 
 /**
  * Teto de chamadas ao modelo por rodada. O dia a dia são poucos emails; o
@@ -69,11 +85,13 @@ export class EmailService {
   private readonly config: ImapConfig | null;
   private running = false;
   private classifying = false;
+  private resolving = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly applications: ApplicationService,
     private readonly classifier: EmailClassifierService,
+    private readonly resolver: EmailResolverService,
     config: ConfigService<Env, true>,
   ) {
     const host = config.get('IMAP_HOST', { infer: true });
@@ -380,6 +398,8 @@ export class EmailService {
       where: {
         applicationId: null,
         senderVerified: true,
+        // Você tirou da tela: não volta sozinho para dentro de uma candidatura.
+        dismissedAt: null,
         receivedAt: { gte: daysAgo(RELINK_DAYS) },
         // Digest de vagas nunca é correspondência de candidatura. Sem isto, um
         // alerta citando seis empresas pode casar com uma delas e entrar na
@@ -464,6 +484,7 @@ export class EmailService {
     const rows = await this.prisma.emailMessage.findMany({
       where: {
         applicationId: null,
+        dismissedAt: null,
         // Digest de vagas fora, e a exclusão precisa estar AQUI e não depois
         // do `map`: o `take` corta antes de classificar, e são ~250 alertas
         // por ano contra ~16 candidaturas. Filtrando em memória, a tela
@@ -487,9 +508,8 @@ export class EmailService {
           subject: row.subject,
           receivedAt: row.receivedAt.toISOString(),
           kind: classify(row.subject, row.bodyText),
-          preview: row.bodyText
-            ? row.bodyText.replace(/\s+/g, ' ').slice(0, PREVIEW_CHARS)
-            : null,
+          preview: excerpt(row.bodyText, PREVIEW_CHARS),
+          gmailUrl: gmailUrl(row.messageId, this.config),
           companyGuess: companyGuess(
             row.fromName,
             row.fromAddress,
@@ -776,6 +796,339 @@ export class EmailService {
   }
 
   /**
+   * Tira um email da tela de pendentes.
+   *
+   * Só email sem candidatura: o que já está vinculado não aparece nessa tela,
+   * e descartá-lo esconderia um item do histórico de uma candidatura.
+   */
+  async dismiss(id: string): Promise<void> {
+    const { count } = await this.prisma.emailMessage.updateMany({
+      where: { id, applicationId: null },
+      data: { dismissedAt: new Date() },
+    });
+
+    if (count === 0) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Email não encontrado entre os pendentes.',
+      });
+    }
+  }
+
+  async undismiss(id: string): Promise<void> {
+    await this.prisma.emailMessage.updateMany({
+      where: { id },
+      data: { dismissedAt: null },
+    });
+  }
+
+  /**
+   * "Resolver por IA": um plano para os emails escolhidos. NÃO grava nada.
+   *
+   * Três tipos de email nunca chegam ao modelo, e voltam como "nada a fazer"
+   * com o motivo: não identificado (você pediu, e é o que o texto não
+   * sustenta como email de candidatura), alerta de vagas, e remetente não
+   * confirmado — este último é a regra de `sender-auth.ts`: texto de quem
+   * pode ter forjado o "De" não vai para o modelo.
+   */
+  async resolve(
+    profileId: string,
+    emailIds: string[],
+  ): Promise<EmailResolution[]> {
+    if (!this.resolver.configured) {
+      throw new ServiceUnavailableException({
+        error: 'Service Unavailable',
+        message:
+          'Resolver por IA indisponível: defina ANTHROPIC_API_KEY no .env do backend.',
+      });
+    }
+
+    // Cada rodada são até 20 chamadas pagas. Duas ao mesmo tempo é clique
+    // duplo, não intenção.
+    if (this.resolving) {
+      throw new ServiceUnavailableException({
+        error: 'Service Unavailable',
+        message: 'Já existe uma resolução por IA em andamento.',
+      });
+    }
+
+    this.resolving = true;
+
+    try {
+      await this.assertProfile(profileId);
+
+      const ids = [...new Set(emailIds)];
+      const [rows, applications] = await Promise.all([
+        this.prisma.emailMessage.findMany({
+          where: { id: { in: ids }, applicationId: null, dismissedAt: null },
+          select: {
+            id: true,
+            subject: true,
+            fromName: true,
+            fromAddress: true,
+            bodyText: true,
+            senderVerified: true,
+          },
+        }),
+        this.listedApplications(profileId),
+      ]);
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const plan = new Map<string, EmailResolution>();
+      const toAsk: typeof rows = [];
+
+      for (const id of ids) {
+        const row = byId.get(id);
+        const skipped = row
+          ? whyNotAsk(row)
+          : 'Este email não está mais pendente.';
+
+        if (skipped || !row) {
+          plan.set(id, skip(id, skipped ?? ''));
+        } else {
+          toAsk.push(row);
+        }
+      }
+
+      for (let start = 0; start < toAsk.length; start += RESOLVE_PARALLEL) {
+        const chunk = toAsk.slice(start, start + RESOLVE_PARALLEL);
+        const outcomes = await Promise.allSettled(
+          chunk.map((row) => this.resolver.decide(row, applications)),
+        );
+
+        outcomes.forEach((outcome, index) => {
+          const row = chunk[index];
+
+          if (outcome.status === 'rejected') {
+            throw outcome.reason;
+          }
+
+          plan.set(
+            row.id,
+            outcome.value
+              ? toResolution(row, applications, outcome.value)
+              : skip(row.id, 'A IA não devolveu uma resposta válida.'),
+          );
+        });
+      }
+
+      return ids.map((id) => plan.get(id)!);
+    } catch (error) {
+      if (error instanceof ClassifierUnavailableError) {
+        this.logger.warn(`Resolver por IA interrompido: ${error.message}`);
+
+        throw new ServiceUnavailableException({
+          error: 'Service Unavailable',
+          message:
+            'A IA não respondeu agora. Confira o crédito da conta Anthropic e a conexão, e tente de novo.',
+        });
+      }
+
+      throw error;
+    } finally {
+      this.resolving = false;
+    }
+  }
+
+  /**
+   * Executa o que você aprovou do plano.
+   *
+   * O corpo veio do navegador, então cada item é conferido contra o banco
+   * como uma ação manual: o email ainda está pendente, a candidatura existe e
+   * é deste perfil. Item por item, sem transação única — uma falha não desfaz
+   * os que deram certo, e volta em `failed` para a tela dizer qual foi.
+   */
+  async applyResolutions(
+    input: ApplyResolutionsInput,
+  ): Promise<ApplyResolutionsResult> {
+    await this.assertProfile(input.profileId);
+
+    const failed: ApplyResolutionsResult['failed'] = [];
+    let applied = 0;
+
+    // Do email mais antigo para o mais novo. A confirmação e a recusa do
+    // mesmo processo chegam no mesmo plano, e é a última que diz em que pé a
+    // candidatura está — fora de ordem, a recusa seria aplicada primeiro e o
+    // histórico sairia ao contrário.
+    const dates = await this.prisma.emailMessage.findMany({
+      where: { id: { in: input.items.map((item) => item.emailId) } },
+      select: { id: true, receivedAt: true },
+    });
+    const receivedAt = new Map(
+      dates.map((row) => [row.id, row.receivedAt.getTime()]),
+    );
+    const items = [...input.items].sort(
+      (a, b) =>
+        (receivedAt.get(a.emailId) ?? 0) - (receivedAt.get(b.emailId) ?? 0),
+    );
+
+    for (const item of items) {
+      try {
+        const email = await this.prisma.emailMessage.findFirst({
+          where: { id: item.emailId, applicationId: null, dismissedAt: null },
+          select: { id: true, receivedAt: true, senderVerified: true },
+        });
+
+        if (!email) {
+          throw new NotFoundException({
+            error: 'Not Found',
+            message: 'Este email não está mais pendente.',
+          });
+        }
+
+        // Status vindo de leitura de modelo só vale para remetente
+        // confirmado — a mesma regra da sugestão automática.
+        if (item.status && email.senderVerified !== true) {
+          throw new ConflictException({
+            error: 'Conflict',
+            message: 'Remetente não confirmado: o status não foi alterado.',
+          });
+        }
+
+        const applicationId =
+          item.action === 'link'
+            ? await this.ownedApplication(item.applicationId, input.profileId)
+            : await this.findOrCreate(input.profileId, item, email.receivedAt);
+
+        await this.prisma.emailMessage.update({
+          where: { id: email.id },
+          data: {
+            applicationId,
+            profileId: input.profileId,
+            // Já foi lido pelo modelo nesta rodada: marcar evita que a
+            // próxima sincronização pague para ler de novo.
+            processedAt: new Date(),
+            suggestedStatus: item.status,
+            suggestionNote: null,
+            suggestionResolvedAt: item.status ? new Date() : null,
+          },
+        });
+
+        if (item.status) {
+          await this.moveStatus(applicationId, item.status, email);
+        }
+
+        applied += 1;
+      } catch (error) {
+        this.logger.warn(
+          `Resolução do email ${item.emailId} falhou: ${describe(error)}`,
+        );
+        failed.push({ emailId: item.emailId, message: publicMessage(error) });
+      }
+    }
+
+    return { applied, failed };
+  }
+
+  /**
+   * A candidatura de um item "criar": a que já existe com essa empresa e esse
+   * cargo, ou uma nova.
+   *
+   * Dois emails do mesmo processo propõem criar a mesma candidatura. Sem
+   * procurar antes, o segundo bateria na regra de duplicata e ficaria de
+   * fora — justamente o que traz o status mais recente.
+   */
+  private async findOrCreate(
+    profileId: string,
+    item: { company: string; title: string },
+    appliedAt: Date,
+  ): Promise<string> {
+    const existing = await this.prisma.application.findFirst({
+      where: {
+        profileId,
+        ...active,
+        job: {
+          company: { equals: item.company, mode: 'insensitive' },
+          title: { equals: item.title, mode: 'insensitive' },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const created = await this.applications.create({
+      profileId,
+      company: item.company,
+      title: item.title,
+      status: 'aplicado',
+      appliedAt: appliedAt.toISOString(),
+    });
+
+    return created.id;
+  }
+
+  /** Pelo `ApplicationService.update()`, como toda mudança de status. */
+  private async moveStatus(
+    applicationId: string,
+    status: EmailStatusVerdict,
+    email: { id: string; receivedAt: Date },
+  ): Promise<void> {
+    await this.applications.update(
+      applicationId,
+      { status },
+      { source: 'ia', emailMessageId: email.id, occurredAt: email.receivedAt },
+    );
+  }
+
+  private async ownedApplication(
+    applicationId: string,
+    profileId: string,
+  ): Promise<string> {
+    const application = await this.prisma.application.findFirst({
+      where: { id: applicationId, profileId, ...active },
+      select: { id: true },
+    });
+
+    if (!application) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Candidatura não encontrada neste perfil.',
+      });
+    }
+
+    return application.id;
+  }
+
+  private async assertProfile(profileId: string): Promise<void> {
+    const profile = await this.prisma.profile.findUnique({
+      where: { id: profileId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Perfil não encontrado',
+      });
+    }
+  }
+
+  /** As candidaturas que o modelo vê, das mais recentes para as mais antigas. */
+  private async listedApplications(
+    profileId: string,
+  ): Promise<ListedApplication[]> {
+    const rows = await this.prisma.application.findMany({
+      where: { profileId, ...active },
+      orderBy: { updatedAt: 'desc' },
+      take: MAX_LISTED,
+      select: {
+        id: true,
+        status: true,
+        job: { select: { company: true, title: true } },
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      company: row.job.company,
+      title: row.job.title,
+      status: row.status,
+    }));
+  }
+
+  /**
    * Cria a candidatura que o email prova existir.
    *
    * Passa pelo `ApplicationService.create()`, e não por um insert próprio: é
@@ -880,6 +1233,60 @@ const unclassified = {
   suggestionNote: null,
   suggestionResolvedAt: null,
 } as const;
+
+function skip(emailId: string, reason: string): EmailResolution {
+  return {
+    emailId,
+    action: 'skip',
+    applicationId: null,
+    company: null,
+    title: null,
+    status: null,
+    reason,
+    grounded: false,
+  };
+}
+
+/** Por que um email pendente não vai para o modelo, ou `null` se vai. */
+function whyNotAsk(row: {
+  subject: string;
+  bodyText: string | null;
+  fromAddress: string;
+  senderVerified: boolean | null;
+}): string | null {
+  if (row.senderVerified !== true) {
+    return 'Remetente não confirmado: o email não foi enviado à IA.';
+  }
+
+  const kind = classify(row.subject, row.bodyText);
+
+  if (kind === 'alerta' || isJobDigestSender(row.fromAddress)) {
+    return 'É um alerta de vagas, não um retorno de candidatura.';
+  }
+
+  if (kind === 'desconhecido') {
+    return 'Não identificado como email de candidatura: não foi enviado à IA.';
+  }
+
+  return null;
+}
+
+/** A mensagem de um erro HTTP nosso; qualquer outro vira texto genérico. */
+function publicMessage(error: unknown): string {
+  if (error instanceof HttpException) {
+    const body = error.getResponse();
+
+    if (typeof body === 'object' && body !== null && 'message' in body) {
+      const message: unknown = body.message;
+
+      if (typeof message === 'string') {
+        return message;
+      }
+    }
+  }
+
+  return 'Não foi possível aplicar esta ação.';
+}
 
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 86_400_000);

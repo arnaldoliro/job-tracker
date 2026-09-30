@@ -10,14 +10,20 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  applyResolutionsSchema,
   createApplicationFromEmailSchema,
   linkEmailSchema,
+  resolveEmailsSchema,
   syncEmailsSchema,
 } from '@recruit/shared';
 import type {
   Application,
+  ApplyResolutionsInput,
+  ApplyResolutionsResult,
   CreateApplicationFromEmailInput,
   EmailMessage,
+  EmailResolution,
+  ResolveEmailsInput,
   EmailStatus,
   EmailSyncResult,
   LinkEmailInput,
@@ -65,6 +71,39 @@ export class EmailController {
   @HttpCode(HttpStatus.NO_CONTENT)
   dismissSuggestion(@Param('id') id: string): Promise<void> {
     return this.emails.dismissSuggestion(id);
+  }
+
+  /**
+   * Pede o plano ao modelo. POST porque custa chamada paga, não porque
+   * grave: quem grava é `emails/resolve/apply`, depois do seu clique.
+   */
+  @Post('emails/resolve')
+  @HttpCode(HttpStatus.OK)
+  resolve(
+    @Body(new ZodValidationPipe(resolveEmailsSchema)) input: ResolveEmailsInput,
+  ): Promise<EmailResolution[]> {
+    return this.emails.resolve(input.profileId, input.emailIds);
+  }
+
+  @Post('emails/resolve/apply')
+  @HttpCode(HttpStatus.OK)
+  applyResolutions(
+    @Body(new ZodValidationPipe(applyResolutionsSchema))
+    input: ApplyResolutionsInput,
+  ): Promise<ApplyResolutionsResult> {
+    return this.emails.applyResolutions(input);
+  }
+
+  @Post('emails/:id/dismiss')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  dismiss(@Param('id') id: string): Promise<void> {
+    return this.emails.dismiss(id);
+  }
+
+  @Delete('emails/:id/dismiss')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  undismiss(@Param('id') id: string): Promise<void> {
+    return this.emails.undismiss(id);
   }
 
   @Post('emails/sync')
