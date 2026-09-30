@@ -320,6 +320,14 @@ model EmailMessage {
   /// instrução. Ver seção 5 do CLAUDE.md.
   bodyText    String?
 
+  /// O servidor de email confirmou que o remetente é quem diz ser (SPF, DKIM
+  /// ou DMARC, para o domínio do "De"). Só email verificado é vinculado
+  /// sozinho e lido pelo modelo — ver `sender-auth.ts`.
+  ///
+  /// Nulo nos emails guardados antes desta coluna: não se sabe, e "não se
+  /// sabe" é tratado como não verificado até uma sincronização reler o email.
+  senderVerified Boolean?
+
   /// Nulo enquanto o job de classificação não rodou.
   processedAt DateTime?
 

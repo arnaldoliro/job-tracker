@@ -2,9 +2,11 @@ import {
   boardSlugFromUrl,
   domainOf,
   isAtsDomain,
+  isJobDigestSender,
   mentionsCompany,
   stripVia,
 } from './ats';
+import { classify } from './confirmation';
 import { fold } from '../job/discovery/normalize';
 
 /**
@@ -75,12 +77,19 @@ export function matchByThread(
 /**
  * Camadas 1 e 2.
  *
- * Qualificam apenas: empresa no nome de exibição (sem o "via <ATS>"), domínio
- * do remetente que NÃO é de ATS, ou o slug do board na URL da vaga.
+ * Qualificam: empresa no nome de exibição (sem o "via <ATS>"), domínio do
+ * remetente que NÃO é de ATS, ou — quando o remetente É um ATS — a empresa
+ * citada no assunto ou no TOPO do corpo.
  *
- * O corpo do email não qualifica — rodapé, "powered by" e digest de alertas
- * citam dezenas de empresas, e usar o corpo como qualificador faria um email
- * casar com meia lista de candidaturas.
+ * Essa terceira existe porque é assim que os emails reais chegam: o
+ * Greenhouse manda sem nome de exibição ("Thank you for applying to
+ * <empresa>!"), e a Gupy assina só "Gupy", com a empresa no cabeçalho do
+ * corpo. Sem ela, nenhum dos dois vincula.
+ *
+ * Só o topo, nunca o corpo inteiro: rodapé e "powered by" citam outras
+ * empresas. E nunca em alerta ou digest de vagas, que citam dezenas — um
+ * convite para se candidatar na empresa X não é notícia da sua candidatura
+ * na empresa X.
  */
 export function matchByCompany(
   mail: MailFacts,
@@ -89,6 +98,7 @@ export function matchByCompany(
   const senderDomain = domainOf(mail.fromAddress);
   const fromAts = isAtsDomain(senderDomain);
   const displayName = stripVia(mail.fromName) ?? '';
+  const atsText = fromAts ? headOfAtsMail(mail) : null;
 
   const qualified = candidates
     .filter((candidate) => withinTime(mail, candidate))
@@ -133,14 +143,53 @@ export function matchByCompany(
       return `o remetente é do domínio ${senderDomain}`;
     }
 
-    const slug = boardSlugFromUrl(candidate.jobUrl);
+    if (atsText) {
+      if (mentionsCompany(atsText, candidate.company)) {
+        return `o email cita ${candidate.company}`;
+      }
 
-    if (slug && mentionsCompany(slug.replace(/-/g, ' '), candidate.company)) {
-      return `o board da vaga é de ${candidate.company}`;
+      // O slug cobre o nome que o texto não casa: "Somos BHS 💚" no cadastro,
+      // "BHS" no email, `bhs` no endereço do board.
+      //
+      // Compara o slug com o EMAIL. Antes comparava com a própria empresa da
+      // candidatura, o que é sempre verdade: uma candidatura com URL de board
+      // qualificava para qualquer email de ATS, de qualquer empresa.
+      const slug = boardSlugFromUrl(candidate.jobUrl);
+
+      if (
+        slug &&
+        slug.length >= MIN_SLUG &&
+        mentionsCompany(atsText, slug.replace(/-/g, ' '))
+      ) {
+        return `o email cita o board ${slug}`;
+      }
     }
 
     return null;
   }
+}
+
+/** Quanto do corpo conta como "topo": o cabeçalho, antes do texto corrido. */
+const HEAD_CHARS = 600;
+
+/** Slug menor que isto casa com palavra comum demais para identificar. */
+const MIN_SLUG = 3;
+
+/**
+ * Assunto mais o topo do corpo de um email de ATS, ou `null` quando o email
+ * é alerta de vagas e não pode qualificar por texto.
+ */
+function headOfAtsMail(mail: MailFacts): string | null {
+  if (
+    isJobDigestSender(mail.fromAddress) ||
+    classify(mail.subject, mail.bodyText) === 'alerta'
+  ) {
+    return null;
+  }
+
+  const head = (mail.bodyText ?? '').replace(/\s+/g, ' ').slice(0, HEAD_CHARS);
+
+  return `${mail.subject} ${head}`;
 }
 
 /**

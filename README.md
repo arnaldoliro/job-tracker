@@ -72,6 +72,12 @@ A leitura do email vira uma sugestão no card, com o motivo ao lado, e o status
 só muda no seu clique. Só emails vinculados a uma candidatura vão para a API —
 a caixa de entrada nunca sai da máquina.
 
+**O "De" de um email não prova nada.** Qualquer um escreve
+`no-reply@gupy.com.br` no remetente. O app lê o resultado que o servidor de
+email grava em cada mensagem (SPF, DKIM e DMARC) e só vincula sozinho, e só
+manda ao Claude, o email cujo remetente foi confirmado para aquele domínio.
+O que não passa fica na tela de emails com um aviso, para você decidir.
+
 **Formulário nunca é enviado automaticamente.** Candidatura enviada não tem
 desfazer, e as perguntas que decidem são as abertas, que o sistema se recusa a
 responder. O contrato da API afirma isso: o campo `submitted` é `false`
@@ -157,7 +163,10 @@ Gmail garante esse limite antes de qualquer código ver um email.
    **Mostrar no IMAP**. Sem isso o rótulo existe na web e fica invisível para o
    app.
 4. Crie um filtro que aplique o rótulo aos remetentes de ATS e a
-   `jobalerts-noreply@linkedin.com`.
+   `jobalerts-noreply@linkedin.com`. Use o domínio de onde o email SAI, que
+   nem sempre é o do site: a Gupy manda de `gupy.com.br`, o Greenhouse de
+   `greenhouse-mail.io`, a InHire de `inhire.app`. Na dúvida, abra um email
+   da plataforma e veja o remetente.
 5. Preencha `IMAP_HOST`, `IMAP_USER` e `IMAP_PASSWORD` no
    `recruiter-backend/.env`.
 

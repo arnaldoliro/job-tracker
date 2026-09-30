@@ -382,6 +382,13 @@ h3 {
     backdrop-filter: blur(14px) saturate(140%);
   }
 
+  /* Rolagem interna dos menus: fina e da cor do vidro. A barra padrão do
+     sistema, clara e larga, rasgava o menu escuro ao meio. */
+  .menu-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(1 0 0 / 0.18) transparent;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .cine-aurora,
     .cine-grid,

@@ -24,6 +24,9 @@ const ATS_DOMAINS = new Set([
   'hire.lever.co',
   'ashbyhq.com',
   'gupy.io',
+  // As notificações da Gupy saem de `no-reply@gupy.com.br`; só as páginas de
+  // vaga ficam em `<empresa>.gupy.io`.
+  'gupy.com.br',
   'workable.com',
   'smartrecruiters.com',
   'icims.com',
@@ -35,6 +38,13 @@ const ATS_DOMAINS = new Set([
   'jobvite.com',
   'teamtailor.com',
   'bamboohr.com',
+  // Brasileiras. A InHire manda de `<empresa>@ses-mail.inhire.app`; o site
+  // é `inhire.io`, e é o `.app` que aparece no remetente.
+  'inhire.app',
+  'inhire.io',
+  'abler.com.br',
+  'solides.com.br',
+  'quickin.io',
   'remoteok.com',
   'remotive.com',
   'infojobs.com.br',
@@ -68,6 +78,10 @@ const ATS_BRANDS = new Set([
   'jobvite',
   'teamtailor',
   'bamboohr',
+  'inhire',
+  'abler',
+  'solides',
+  'quickin',
   'remoteok',
   'remotive',
   'infojobs',
