@@ -52,6 +52,8 @@ describe('ats', () => {
     expect(isAtsDomain('greenhouse.io')).toBe(true);
     expect(isAtsDomain('mail.greenhouse.io')).toBe(true);
     expect(isAtsDomain('quintoandar.gupy.io')).toBe(true);
+    expect(isAtsDomain('gupy.com.br')).toBe(true);
+    expect(isAtsDomain('us.greenhouse-mail.io')).toBe(true);
     expect(isAtsDomain('nubank.com.br')).toBe(false);
   });
 
@@ -123,12 +125,120 @@ describe('matchByCompany', () => {
     expect(resultado?.reason).toContain('Nubank');
   });
 
-  it('vincula pelo slug do board quando o remetente é genérico', () => {
-    const resultado = matchByCompany(mail({ fromName: 'Greenhouse' }), [
-      candidate({ jobUrl: 'https://boards.greenhouse.io/nubank/jobs/1' }),
-    ]);
+  it('vincula pelo slug do board quando o email cita o slug', () => {
+    // O cadastro diz "Grupo Exemplo 💚", o email diz só "Exemplo": o nome
+    // não casa, o slug do board casa.
+    const resultado = matchByCompany(
+      mail({
+        fromName: 'Greenhouse',
+        subject: 'Your application to Exemplo',
+      }),
+      [
+        candidate({
+          company: 'Grupo Exemplo 💚',
+          jobUrl: 'https://boards.greenhouse.io/exemplo/jobs/1',
+        }),
+      ],
+    );
 
     expect(resultado?.applicationId).toBe('app-1');
+  });
+
+  it('o slug do board sozinho não qualifica: o email precisa citá-lo', () => {
+    // O defeito antigo: comparava o slug com a empresa da própria
+    // candidatura, que é sempre verdade. Uma candidatura com URL de board
+    // capturava qualquer email de ATS, de qualquer empresa.
+    const resultado = matchByCompany(
+      mail({
+        fromName: 'Greenhouse',
+        subject: 'Thank you for applying to Outra Empresa!',
+      }),
+      [candidate({ jobUrl: 'https://boards.greenhouse.io/nubank/jobs/1' })],
+    );
+
+    expect(resultado).toBeNull();
+  });
+
+  it('vincula email de ATS sem nome de exibição pela empresa no assunto', () => {
+    // A forma real do Greenhouse: sem nome, de um subdomínio regional.
+    const resultado = matchByCompany(
+      mail({
+        fromAddress: 'no-reply@us.greenhouse-mail.io',
+        fromName: null,
+        subject: 'Thank you for applying to Nubank!',
+      }),
+      [
+        candidate({ applicationId: 'app-1', company: 'Nubank' }),
+        candidate({ applicationId: 'app-2', company: 'Stone' }),
+      ],
+    );
+
+    expect(resultado?.applicationId).toBe('app-1');
+  });
+
+  it('vincula email da Gupy pela empresa no topo do corpo', () => {
+    // A forma real da Gupy: assina "Gupy", o assunto cita só o cargo, e a
+    // empresa vem no cabeçalho do corpo.
+    const resultado = matchByCompany(
+      mail({
+        fromAddress: 'no-reply@gupy.com.br',
+        fromName: 'Gupy',
+        subject: 'Etapa Fit Cultural desbloqueada para a vaga Dev Backend PL',
+        bodyText:
+          'Stone\n12345 - Dev Backend PL\n\nUma nova etapa do processo seletivo está disponível pra você!',
+      }),
+      [
+        candidate({ applicationId: 'app-1', company: 'Nubank' }),
+        candidate({ applicationId: 'app-2', company: 'Stone' }),
+      ],
+    );
+
+    expect(resultado?.applicationId).toBe('app-2');
+  });
+
+  it('empresa citada só no fim do corpo não qualifica', () => {
+    // Rodapé e "outras vagas" citam empresas que não são a do email.
+    const resultado = matchByCompany(
+      mail({
+        fromAddress: 'no-reply@gupy.com.br',
+        fromName: 'Gupy',
+        subject: 'Atualização da sua candidatura',
+        bodyText: `${'Texto do email sobre outra empresa. '.repeat(30)}Veja também vagas na Nubank.`,
+      }),
+      [candidate()],
+    );
+
+    expect(resultado).toBeNull();
+  });
+
+  it('alerta de vaga não vincula, mesmo citando a empresa no assunto', () => {
+    // Convite para se candidatar na empresa X não é notícia da candidatura
+    // que você já tem na empresa X.
+    const resultado = matchByCompany(
+      mail({
+        fromAddress: 'jobs-noreply@linkedin.com',
+        fromName: 'LinkedIn',
+        subject: 'Candidate-se agora à vaga de Dev Backend na Nubank',
+      }),
+      [candidate()],
+    );
+
+    expect(resultado).toBeNull();
+  });
+
+  it('texto não qualifica quando o remetente não é um ATS', () => {
+    // Fora de ATS vale o domínio próprio. Um email qualquer citando a
+    // empresa no assunto não é dela.
+    const resultado = matchByCompany(
+      mail({
+        fromAddress: 'amigo@gmail.com',
+        fromName: 'Amigo',
+        subject: 'Vi que a Nubank está contratando gente',
+      }),
+      [candidate()],
+    );
+
+    expect(resultado).toBeNull();
   });
 
   it('NÃO vincula só porque o remetente é o mesmo ATS de várias candidaturas', () => {
