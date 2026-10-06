@@ -30,11 +30,11 @@ const TIMEOUT_MS = 12_000;
 
 /**
  * Board de vaga é bem maior que página de vaga — a descrição de cada vaga vem
- * embutida. Medido: Nubank 1,75 MB, Ramp 2,34 MB, OpenAI 12,9 MB.
+ * embutida. Medido em boards reais: de 1,75 MB a 12,9 MB.
  *
- * O teto fica em 3 MB e a OpenAI fica de fora da watchlist. Subir o limite para
- * caber no maior board é o caminho errado: são 12 MB de JSON parseados de uma
- * vez no event loop, para uma empresa só.
+ * O teto fica em 4 MB, e board maior que isso fica de fora da watchlist.
+ * Subir o limite para caber no maior board é o caminho errado: são 12 MB de
+ * JSON parseados de uma vez no event loop, para uma empresa só.
  */
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
 

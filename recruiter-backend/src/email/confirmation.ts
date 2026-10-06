@@ -180,10 +180,10 @@ function looksLikeRobot(name: string): boolean {
   return ROBOT.some((word) => value.includes(word));
 }
 
-/** "Sua candidatura para X na Nubank" / "Your application at Nubank". */
+/** "Sua candidatura para X na Aurora" / "Your application at Aurora". */
 function companyFromSubject(subject: string): string | null {
   // "à" e "ao" entram porque o LinkedIn escreve "candidatura foi enviada à
-  // DS3 Digital". Sem elas a expressão desiste do assunto e o palpite cai no
+  // Empresa Exemplo". Sem elas a expressão desiste do assunto e o palpite cai no
   // nome de exibição do remetente — que nesses emails é "LinkedIn".
   //
   // A âncora é `(?:^|\s)`, não `\b`: fronteira de palavra é definida por

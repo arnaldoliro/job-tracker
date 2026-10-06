@@ -6,11 +6,11 @@ import { fold } from '../job/discovery/normalize';
  *
  * O ponto central deste arquivo é uma inversão que não é óbvia: **domínio de
  * ATS conhecido é anti-sinal para vincular**. A vaga veio da descoberta, então
- * a URL é `boards.greenhouse.io/nubank/jobs/123` e o remetente é
+ * a URL é `boards.greenhouse.io/aurora/jobs/123` e o remetente é
  * `no-reply@greenhouse.io`. Casar um com o outro casa com TODAS as suas
  * candidaturas via Greenhouse ao mesmo tempo.
  *
- * O sinal de verdade estava escondido ali dentro: o slug do board — `nubank`.
+ * O sinal de verdade estava escondido ali dentro: o slug do board — `aurora`.
  */
 
 /**
@@ -56,7 +56,7 @@ const ATS_DOMAINS = new Set([
 /**
  * O nome de exibição é o do PRÓPRIO portal, e não o de uma empresa.
  *
- * `stripVia` resolve "Nubank via Greenhouse", onde há um sufixo para remover.
+ * `stripVia` resolve "Aurora via Greenhouse", onde há um sufixo para remover.
  * Não resolve "LinkedIn", que é o remetente quando a candidatura foi feita
  * pelo portal — e aí o palpite de empresa devolveria "LinkedIn" para toda
  * candidatura feita por lá.
@@ -151,7 +151,7 @@ export function isAtsDomain(domain: string | null): boolean {
 /**
  * Tira o sufixo que os ATS grudam no nome de exibição.
  *
- * "Nubank via Greenhouse" → "Nubank". Sem isso, o nome nunca casa exatamente
+ * "Aurora via Greenhouse" → "Aurora". Sem isso, o nome nunca casa exatamente
  * com `Job.company`, e o sinal mais confiável de identificação da empresa se
  * perde no ruído do intermediário.
  */
@@ -177,10 +177,10 @@ export function stripVia(name: string | null): string | null {
 /**
  * O identificador da empresa dentro da URL do board.
  *
- *   boards.greenhouse.io/nubank/jobs/123   → nubank
- *   jobs.lever.co/spotify/abc              → spotify
- *   jobs.ashbyhq.com/linear/uuid           → linear
- *   quintoandar.gupy.io/job/...            → quintoandar
+ *   boards.greenhouse.io/aurora/jobs/123   → aurora
+ *   jobs.lever.co/ondasonora/abc           → ondasonora
+ *   jobs.ashbyhq.com/vetor/uuid            → vetor
+ *   casanorte.gupy.io/job/...              → casanorte
  *
  * É o que sobra de útil no sinal de domínio depois de descartar o domínio.
  */
@@ -223,7 +223,7 @@ export function boardSlugFromUrl(url: string | null): string | null {
  * Compara nome de empresa com fronteira de palavra.
  *
  * `fold()` tira acento e caixa, mas não delimita — `fold("Nu")` é substring de
- * `fold("Menu")`. Sem `\b`, empresas de nome curto (Nu, Loft, Stone, Take, Hub)
+ * `fold("Menu")`. Sem `\b`, empresas de nome curto (Lua, Arco, Pedra, Rio, Hub)
  * casariam com quase qualquer texto.
  */
 export function mentionsCompany(haystack: string, company: string): boolean {

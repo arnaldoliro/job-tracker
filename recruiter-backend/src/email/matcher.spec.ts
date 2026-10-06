@@ -38,7 +38,7 @@ function mail(overrides: Partial<MailFacts> = {}): MailFacts {
 function candidate(overrides: Partial<Candidate> = {}): Candidate {
   return {
     applicationId: 'app-1',
-    company: 'Nubank',
+    company: 'Aurora',
     title: 'Senior Backend Engineer',
     jobUrl: null,
     createdAt: ONTEM,
@@ -51,27 +51,27 @@ describe('ats', () => {
   it('reconhece domínio de ATS por sufixo', () => {
     expect(isAtsDomain('greenhouse.io')).toBe(true);
     expect(isAtsDomain('mail.greenhouse.io')).toBe(true);
-    expect(isAtsDomain('quintoandar.gupy.io')).toBe(true);
+    expect(isAtsDomain('casanorte.gupy.io')).toBe(true);
     expect(isAtsDomain('gupy.com.br')).toBe(true);
     expect(isAtsDomain('us.greenhouse-mail.io')).toBe(true);
-    expect(isAtsDomain('nubank.com.br')).toBe(false);
+    expect(isAtsDomain('aurora.com.br')).toBe(false);
   });
 
   it('remove o "via <ATS>" do nome de exibição', () => {
-    expect(stripVia('Nubank via Greenhouse')).toBe('Nubank');
-    expect(stripVia('QuintoAndar (via Lever)')).toBe('QuintoAndar');
-    expect(stripVia('Stone')).toBe('Stone');
+    expect(stripVia('Aurora via Greenhouse')).toBe('Aurora');
+    expect(stripVia('CasaNorte (via Lever)')).toBe('CasaNorte');
+    expect(stripVia('Pedra')).toBe('Pedra');
   });
 
   it('extrai o slug da empresa da URL do board', () => {
     expect(
-      boardSlugFromUrl('https://boards.greenhouse.io/nubank/jobs/123'),
-    ).toBe('nubank');
-    expect(boardSlugFromUrl('https://jobs.lever.co/spotify/abc')).toBe(
-      'spotify',
+      boardSlugFromUrl('https://boards.greenhouse.io/aurora/jobs/123'),
+    ).toBe('aurora');
+    expect(boardSlugFromUrl('https://jobs.lever.co/ondasonora/abc')).toBe(
+      'ondasonora',
     );
-    expect(boardSlugFromUrl('https://quintoandar.gupy.io/job/xyz')).toBe(
-      'quintoandar',
+    expect(boardSlugFromUrl('https://casanorte.gupy.io/job/xyz')).toBe(
+      'casanorte',
     );
     expect(boardSlugFromUrl('https://empresa.com/vagas/1')).toBeNull();
     expect(boardSlugFromUrl(null)).toBeNull();
@@ -92,7 +92,7 @@ describe('ats', () => {
     // Sem \b, "Nu" casaria com "Menu" e a empresa apareceria em toda parte.
     expect(mentionsCompany('almoço no menu de hoje', 'Nu')).toBe(false);
     expect(mentionsCompany('vaga no Nu para você', 'Nu')).toBe(true);
-    expect(mentionsCompany('trabalhe na NUBANK', 'Nubank')).toBe(true);
+    expect(mentionsCompany('trabalhe na AURORA', 'Aurora')).toBe(true);
   });
 });
 
@@ -117,12 +117,12 @@ describe('matchByThread', () => {
 describe('matchByCompany', () => {
   it('vincula pelo nome de exibição do ATS', () => {
     const resultado = matchByCompany(
-      mail({ fromName: 'Nubank via Greenhouse', subject: 'Sua candidatura' }),
+      mail({ fromName: 'Aurora via Greenhouse', subject: 'Sua candidatura' }),
       [candidate()],
     );
 
     expect(resultado?.applicationId).toBe('app-1');
-    expect(resultado?.reason).toContain('Nubank');
+    expect(resultado?.reason).toContain('Aurora');
   });
 
   it('vincula pelo slug do board quando o email cita o slug', () => {
@@ -153,7 +153,7 @@ describe('matchByCompany', () => {
         fromName: 'Greenhouse',
         subject: 'Thank you for applying to Outra Empresa!',
       }),
-      [candidate({ jobUrl: 'https://boards.greenhouse.io/nubank/jobs/1' })],
+      [candidate({ jobUrl: 'https://boards.greenhouse.io/aurora/jobs/1' })],
     );
 
     expect(resultado).toBeNull();
@@ -165,11 +165,11 @@ describe('matchByCompany', () => {
       mail({
         fromAddress: 'no-reply@us.greenhouse-mail.io',
         fromName: null,
-        subject: 'Thank you for applying to Nubank!',
+        subject: 'Thank you for applying to Aurora!',
       }),
       [
-        candidate({ applicationId: 'app-1', company: 'Nubank' }),
-        candidate({ applicationId: 'app-2', company: 'Stone' }),
+        candidate({ applicationId: 'app-1', company: 'Aurora' }),
+        candidate({ applicationId: 'app-2', company: 'Pedra' }),
       ],
     );
 
@@ -185,11 +185,11 @@ describe('matchByCompany', () => {
         fromName: 'Gupy',
         subject: 'Etapa Fit Cultural desbloqueada para a vaga Dev Backend PL',
         bodyText:
-          'Stone\n12345 - Dev Backend PL\n\nUma nova etapa do processo seletivo está disponível pra você!',
+          'Pedra\n12345 - Dev Backend PL\n\nUma nova etapa do processo seletivo está disponível pra você!',
       }),
       [
-        candidate({ applicationId: 'app-1', company: 'Nubank' }),
-        candidate({ applicationId: 'app-2', company: 'Stone' }),
+        candidate({ applicationId: 'app-1', company: 'Aurora' }),
+        candidate({ applicationId: 'app-2', company: 'Pedra' }),
       ],
     );
 
@@ -203,7 +203,7 @@ describe('matchByCompany', () => {
         fromAddress: 'no-reply@gupy.com.br',
         fromName: 'Gupy',
         subject: 'Atualização da sua candidatura',
-        bodyText: `${'Texto do email sobre outra empresa. '.repeat(30)}Veja também vagas na Nubank.`,
+        bodyText: `${'Texto do email sobre outra empresa. '.repeat(30)}Veja também vagas na Aurora.`,
       }),
       [candidate()],
     );
@@ -218,7 +218,7 @@ describe('matchByCompany', () => {
       mail({
         fromAddress: 'jobs-noreply@linkedin.com',
         fromName: 'LinkedIn',
-        subject: 'Candidate-se agora à vaga de Dev Backend na Nubank',
+        subject: 'Candidate-se agora à vaga de Dev Backend na Aurora',
       }),
       [candidate()],
     );
@@ -233,7 +233,7 @@ describe('matchByCompany', () => {
       mail({
         fromAddress: 'amigo@gmail.com',
         fromName: 'Amigo',
-        subject: 'Vi que a Nubank está contratando gente',
+        subject: 'Vi que a Aurora está contratando gente',
       }),
       [candidate()],
     );
@@ -245,8 +245,8 @@ describe('matchByCompany', () => {
     // O caso que quebraria tudo: greenhouse.io é o remetente de todas as
     // candidaturas feitas por Greenhouse. O domínio não pode qualificar.
     const resultado = matchByCompany(mail({ fromName: 'Greenhouse' }), [
-      candidate({ applicationId: 'app-1', company: 'Nubank' }),
-      candidate({ applicationId: 'app-2', company: 'Stone' }),
+      candidate({ applicationId: 'app-1', company: 'Aurora' }),
+      candidate({ applicationId: 'app-2', company: 'Pedra' }),
     ]);
 
     expect(resultado).toBeNull();
@@ -254,17 +254,17 @@ describe('matchByCompany', () => {
 
   it('vincula por domínio próprio da empresa', () => {
     const resultado = matchByCompany(
-      mail({ fromAddress: 'talentos@nubank.com.br', fromName: 'Recrutamento' }),
+      mail({ fromAddress: 'talentos@aurora.com.br', fromName: 'Recrutamento' }),
       [candidate()],
     );
 
-    expect(resultado?.reason).toContain('nubank.com.br');
+    expect(resultado?.reason).toContain('aurora.com.br');
   });
 
   it('não vincula quando duas empresas diferentes qualificam', () => {
-    const resultado = matchByCompany(mail({ fromName: 'Nubank e Stone' }), [
-      candidate({ applicationId: 'app-1', company: 'Nubank' }),
-      candidate({ applicationId: 'app-2', company: 'Stone' }),
+    const resultado = matchByCompany(mail({ fromName: 'Aurora e Pedra' }), [
+      candidate({ applicationId: 'app-1', company: 'Aurora' }),
+      candidate({ applicationId: 'app-2', company: 'Pedra' }),
     ]);
 
     expect(resultado).toBeNull();
@@ -273,7 +273,7 @@ describe('matchByCompany', () => {
   it('desempata pelo cargo quando a empresa tem duas candidaturas', () => {
     const resultado = matchByCompany(
       mail({
-        fromName: 'Nubank via Greenhouse',
+        fromName: 'Aurora via Greenhouse',
         subject: 'Sua candidatura para Android Engineer',
       }),
       [
@@ -289,7 +289,7 @@ describe('matchByCompany', () => {
   it('descarta candidatura registrada depois do email', () => {
     const resultado = matchByCompany(
       mail({
-        fromName: 'Nubank',
+        fromName: 'Aurora',
         receivedAt: new Date('2026-01-01T00:00:00Z'),
       }),
       [candidate({ createdAt: HOJE })],
@@ -316,7 +316,7 @@ describe('classify', () => {
   it('reconhece confirmação em português e inglês', () => {
     expect(classify('Recebemos sua candidatura', null)).toBe('confirmacao');
     expect(classify('We received your application', null)).toBe('confirmacao');
-    expect(classify('Thank you for applying to Nubank', null)).toBe(
+    expect(classify('Thank you for applying to Aurora', null)).toBe(
       'confirmacao',
     );
   });
@@ -366,7 +366,7 @@ describe('classify', () => {
     // apareceria em rodapé, dizendo o oposto do que o email diz.
     expect(
       classify(
-        'Sua candidatura a Backend na Stone',
+        'Sua candidatura a Backend na Pedra',
         'infelizmente seguimos com outro',
       ),
     ).toBe('atualizacao');
@@ -381,13 +381,13 @@ describe('classify', () => {
 
 describe('companyGuess', () => {
   it('prefere o nome de exibição sem o via', () => {
-    expect(companyGuess('Nubank via Greenhouse', 'x@greenhouse.io', '')).toBe(
-      'Nubank',
+    expect(companyGuess('Aurora via Greenhouse', 'x@greenhouse.io', '')).toBe(
+      'Aurora',
     );
   });
 
   it('ignora remetente robô e cai no domínio próprio', () => {
-    expect(companyGuess('No-Reply', 'no-reply@stone.com.br', '')).toBe('Stone');
+    expect(companyGuess('No-Reply', 'no-reply@pedra.com.br', '')).toBe('Pedra');
   });
 
   it('não chuta o ATS como empresa', () => {
@@ -423,11 +423,11 @@ describe('companyGuess', () => {
   });
 
   it('o nome do portal não qualifica como empresa', () => {
-    // `stripVia` resolve "Nubank via Greenhouse", onde há sufixo a remover.
+    // `stripVia` resolve "Aurora via Greenhouse", onde há sufixo a remover.
     // Não resolve "LinkedIn", que manda em nome próprio.
     expect(isAtsBrand('LinkedIn')).toBe(true);
     expect(isAtsBrand('LinkedIn Job Alerts')).toBe(true);
-    expect(isAtsBrand('Nubank')).toBe(false);
+    expect(isAtsBrand('Aurora')).toBe(false);
     // Por token, não por substring: "Leverage" não pode virar "lever".
     expect(isAtsBrand('Leverage')).toBe(false);
   });
@@ -436,7 +436,7 @@ describe('companyGuess', () => {
     // `\b` é definido por [A-Za-z0-9_], então não existe fronteira antes de
     // "à" e a alternativa nunca casaria. Mesmo defeito que ".NET" teve.
     expect(
-      companyGuess('LinkedIn', 'jobs-noreply@linkedin.com', 'enviada à Stone'),
-    ).toBe('Stone');
+      companyGuess('LinkedIn', 'jobs-noreply@linkedin.com', 'enviada à Pedra'),
+    ).toBe('Pedra');
   });
 });

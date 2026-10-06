@@ -90,7 +90,7 @@ describe('NEVER_FILL', () => {
     'Cover letter',
     'Carta de apresentação',
     'Por que você quer trabalhar aqui?',
-    'Why do you want to work at Linear?',
+    'Why do you want to work at Aurora?',
     'Pretensão salarial',
     'Salary expectation',
     'Disponibilidade para início',

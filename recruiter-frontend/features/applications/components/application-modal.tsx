@@ -116,7 +116,7 @@ export function ApplicationModal({
           <Field
             label="Empresa"
             name="company"
-            placeholder="Nubank"
+            placeholder="Ex.: Empresa Exemplo"
             required
             autoFocus
             defaultValue={application?.job.company}

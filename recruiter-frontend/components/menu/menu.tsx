@@ -561,7 +561,7 @@ function measure(trigger: HTMLElement, width: number, wanted: number): Position 
   };
 }
 
-/** Minúsculas e sem acento: "Itaú" acha "itau". */
+/** Minúsculas e sem acento: "São Paulo" acha "sao paulo". */
 function fold(text: string): string {
   return text
     .normalize("NFD")
