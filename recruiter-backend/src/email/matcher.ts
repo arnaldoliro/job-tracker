@@ -148,8 +148,8 @@ export function matchByCompany(
         return `o email cita ${candidate.company}`;
       }
 
-      // O slug cobre o nome que o texto não casa: "Somos BHS 💚" no cadastro,
-      // "BHS" no email, `bhs` no endereço do board.
+      // O slug cobre o nome que o texto não casa: "Grupo Exemplo 💚" no cadastro,
+      // "Exemplo" no email, `exemplo` no endereço do board.
       //
       // Compara o slug com o EMAIL. Antes comparava com a própria empresa da
       // candidatura, o que é sempre verdade: uma candidatura com URL de board

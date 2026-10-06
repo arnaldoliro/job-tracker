@@ -90,8 +90,8 @@ describe('ats', () => {
 
   it('exige fronteira de palavra ao comparar empresa', () => {
     // Sem \b, "Nu" casaria com "Menu" e a empresa apareceria em toda parte.
-    expect(mentionsCompany('almoço no menu de hoje', 'Nu')).toBe(false);
-    expect(mentionsCompany('vaga no Nu para você', 'Nu')).toBe(true);
+    expect(mentionsCompany('almoço no menu de hoje', 'Lua')).toBe(false);
+    expect(mentionsCompany('vaga na Lua para você', 'Lua')).toBe(true);
     expect(mentionsCompany('trabalhe na AURORA', 'Aurora')).toBe(true);
   });
 });
@@ -346,8 +346,8 @@ describe('classify', () => {
    * por remetente não separa os dois; só o texto separa.
    */
   it.each([
-    'Fulano, candidate-se agora à vaga de Desenvolvedor Node.js na Vagalume',
-    'A empresa Genoma Lab está contratando para um cargo de Remota',
+    'Fulano, candidate-se agora à vaga de Desenvolvedor Node.js na Lumina Tech',
+    'A empresa Laboratório Delta está contratando para um cargo de Remota',
   ])('convite para se candidatar é alerta, não candidatura: %s', (subject) => {
     expect(classify(subject, null)).toBe('alerta');
   });
@@ -355,7 +355,7 @@ describe('classify', () => {
   it('reconhece a confirmação sem verbo do LinkedIn', () => {
     expect(
       classify(
-        'Sua candidatura a Desenvolvedor full stack (Node.JS) na Tata',
+        'Sua candidatura a Desenvolvedor full stack (Node.JS) na Aurora',
         null,
       ),
     ).toBe('confirmacao');
@@ -405,15 +405,15 @@ describe('companyGuess', () => {
    * criasse assim mesmo. A ingestão funcionava e não servia para nada.
    */
   it.each([
-    ['Fulano, sua candidatura foi enviada à KX9 Digital', 'KX9 Digital'],
+    ['Fulano, sua candidatura foi enviada à Zx9 Exemplo', 'Zx9 Exemplo'],
     [
-      'Fulano, sua candidatura foi enviada à Vertex Consultoria Global',
-      'Vertex Consultoria Global',
+      'Fulano, sua candidatura foi enviada à Exemplo Consultoria Global',
+      'Exemplo Consultoria Global',
     ],
-    ['Fulano, sua candidatura foi enviada à Trabalhai', 'Trabalhai'],
+    ['Fulano, sua candidatura foi enviada à Trampoex', 'Trampoex'],
     [
-      'Fulano, sua candidatura foi enviada à Cortex Tecnologia',
-      'Cortex Tecnologia',
+      'Fulano, sua candidatura foi enviada à Exemplo Tecnologia',
+      'Exemplo Tecnologia',
     ],
   ])('lê a empresa do aviso do LinkedIn: %s', (subject, empresa) => {
     expect(classify(subject, null)).toBe('confirmacao');

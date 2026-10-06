@@ -52,12 +52,17 @@ function digest(...blocos: string[]): string {
 describe('parseLinkedInAlert', () => {
   it('lê as seis vagas de um digest', () => {
     const corpo = digest(
-      bloco('Desenvolvedor Júnior', 'Vagalume', 'Salvador, BA', '1001'),
-      bloco('Fullstack Engineer', 'Kaizen', 'Rio de Janeiro e Região', '1002'),
-      bloco('Support Engineer', 'BragaSousa', 'Brasil', '1003'),
-      bloco('Desenvolvedor full stack', 'tecnorio', 'Sorocaba, SP', '1004'),
-      bloco('Programador (RPA)', 'Clinipar', 'Brasil', '1005'),
-      bloco('Desenvolvedor Web', 'Prisma Tech', 'Porto Alegre, RS', '1006'),
+      bloco('Desenvolvedor Júnior', 'Lumina Exemplo', 'Salvador, BA', '1001'),
+      bloco(
+        'Fullstack Engineer',
+        'Kairo Exemplo',
+        'Rio de Janeiro e Região',
+        '1002',
+      ),
+      bloco('Support Engineer', 'ExemploSouza', 'Brasil', '1003'),
+      bloco('Desenvolvedor full stack', 'tecnoexemplo', 'Sorocaba, SP', '1004'),
+      bloco('Programador (RPA)', 'Clinexemplo', 'Brasil', '1005'),
+      bloco('Desenvolvedor Web', 'Prisma Exemplo', 'Porto Alegre, RS', '1006'),
     );
 
     const saida = parseLinkedInAlert(corpo);
@@ -72,14 +77,16 @@ describe('parseLinkedInAlert', () => {
     // Lendo de baixo para cima, "Seu alerta de vaga em: Brasil" fica fora de
     // alcance. Caminhar para frente colocaria o cabeçalho no título.
     const saida = parseLinkedInAlert(
-      digest(bloco('Desenvolvedor Júnior', 'Vagalume', 'Salvador, BA', '1001')),
+      digest(
+        bloco('Desenvolvedor Júnior', 'Lumina Exemplo', 'Salvador, BA', '1001'),
+      ),
     );
 
     expect(saida.jobs[0]).toEqual({
       id: '1001',
       url: 'https://www.linkedin.com/jobs/view/1001',
       title: 'Desenvolvedor Júnior',
-      company: 'Vagalume',
+      company: 'Lumina Exemplo',
       location: 'Salvador, BA',
     });
   });
@@ -104,7 +111,7 @@ describe('parseLinkedInAlert', () => {
       digest(
         bloco(
           'Desenvolvedor Back-end Node.js',
-          'nivelmax',
+          'nivelexemplo',
           'São Paulo e Região',
           '1007',
           ruido,
@@ -113,7 +120,7 @@ describe('parseLinkedInAlert', () => {
     );
 
     expect(saida.jobs[0].location).toBe('São Paulo e Região');
-    expect(saida.jobs[0].company).toBe('nivelmax');
+    expect(saida.jobs[0].company).toBe('nivelexemplo');
     expect(saida.jobs[0].title).toBe('Desenvolvedor Back-end Node.js');
   });
 
@@ -185,9 +192,9 @@ describe('parseLinkedInAlert', () => {
 
   it('descarta o bloco incompleto e mantém os outros', () => {
     const corpo = digest(
-      bloco('Desenvolvedor Júnior', 'Vagalume', 'Salvador, BA', '1011'),
+      bloco('Desenvolvedor Júnior', 'Lumina Exemplo', 'Salvador, BA', '1011'),
       'Só um título\nVisualizar vaga: https://www.linkedin.com/comm/jobs/view/1012/',
-      bloco('Fullstack Engineer', 'Kaizen', 'Brasil', '1013'),
+      bloco('Fullstack Engineer', 'Kairo Exemplo', 'Brasil', '1013'),
     );
 
     const saida = parseLinkedInAlert(corpo);
@@ -202,7 +209,7 @@ describe('parseLinkedInAlert', () => {
     // Sem o piso, o caminhar para trás atravessaria o separador e montaria
     // uma vaga com os campos da anterior — pior que descartar.
     const corpo = digest(
-      bloco('Desenvolvedor Júnior', 'Vagalume', 'Salvador, BA', '1014'),
+      bloco('Desenvolvedor Júnior', 'Lumina Exemplo', 'Salvador, BA', '1014'),
       'Visualizar vaga: https://www.linkedin.com/comm/jobs/view/1015/',
     );
 

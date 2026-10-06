@@ -30,11 +30,11 @@ describe('buildFieldPlan', () => {
 
   it('nome de uma palavra não inventa sobrenome', () => {
     // Campo em branco é melhor que campo com valor errado que você não viu.
-    const único = buildFieldPlan(source({ name: 'Madonna' }));
+    const único = buildFieldPlan(source({ name: 'Zenaide' }));
 
     expect(único.find((f) => f.what === 'sobrenome')).toBeUndefined();
     expect(único.find((f) => f.what === 'primeiro nome')?.value).toBe(
-      'Madonna',
+      'Zenaide',
     );
   });
 

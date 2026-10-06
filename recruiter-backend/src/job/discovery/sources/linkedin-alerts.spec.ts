@@ -144,7 +144,7 @@ describe('LinkedInAlertsSource', () => {
         receivedAt: new Date('2026-09-09T10:00:00Z'),
         bodyText: corpo([
           'Backend Júnior — Go',
-          'Selva Games',
+          'Selva Exemplo Games',
           'Brasil',
           '3001',
         ]),
@@ -154,7 +154,7 @@ describe('LinkedInAlertsSource', () => {
         receivedAt: new Date('2026-09-18T10:00:00Z'),
         bodyText: corpo([
           'Backend Júnior — Go',
-          'Selva Games',
+          'Selva Exemplo Games',
           'Brasil',
           '3002',
         ]),
@@ -174,8 +174,8 @@ describe('LinkedInAlertsSource', () => {
         fromAddress: ALERTA,
         receivedAt: new Date('2026-09-10T10:00:00Z'),
         bodyText: corpo(
-          ['Desenvolvedor Júnior', 'Vagalume', 'Salvador, BA', '3003'],
-          ['Desenvolvedor Júnior', 'Vagalume', 'São Paulo, SP', '3004'],
+          ['Desenvolvedor Júnior', 'Lumina Exemplo', 'Salvador, BA', '3003'],
+          ['Desenvolvedor Júnior', 'Lumina Exemplo', 'São Paulo, SP', '3004'],
         ),
       },
     ]).fetch();
@@ -184,7 +184,7 @@ describe('LinkedInAlertsSource', () => {
   });
 
   it('a stack vem do título, nunca da empresa', async () => {
-    // Uma empresa chamada "Node Solutions" injetaria uma tag que depois
+    // Uma empresa chamada "Node Exemplo" injetaria uma tag que depois
     // dirige a pontuação e a busca por texto.
     const vagas = await fonte([
       {
@@ -192,7 +192,7 @@ describe('LinkedInAlertsSource', () => {
         receivedAt: new Date('2026-09-10T10:00:00Z'),
         bodyText: corpo([
           'Analista de Suporte',
-          'Node Solutions',
+          'Node Exemplo',
           'Brasil',
           '2007',
         ]),
