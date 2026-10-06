@@ -29,8 +29,9 @@ enum ApplicationStatus {
   rejeitado
 }
 
-/// De onde veio a transição de status. `ia` significa que um modelo sugeriu a
-/// mudança — a confirmação humana é registrada convertendo para `manual`.
+/// De onde veio a transição de status. `ia` significa que um modelo leu um
+/// email e sugeriu a mudança, e você a CONFIRMOU — o evento só existe depois
+/// do clique. Sugestão pendente não é evento: mora em `EmailMessage`.
 enum StatusEventSource {
   manual
   email
@@ -41,6 +42,13 @@ enum WorkModel {
   remoto
   hibrido
   presencial
+}
+
+enum ContractType {
+  clt
+  pj
+  estagio
+  temporario
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +70,10 @@ model Profile {
   links     Json?
   /// CV estruturado base (experiências, skills, projetos), validado com Zod.
   resume    Json?
+  /// Filtro da descoberta de vagas: escopo, modalidade, contrato, senioridade
+  /// e stacks preferidas. Validado com Zod na borda, como `links` e `resume`.
+  /// Não vem em export nenhum — imune ao import do LinkedIn.
+  jobPreferences Json?
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -69,6 +81,68 @@ model Profile {
   applications   Application[]
   resumeVersions ResumeVersion[]
   emailMessages  EmailMessage[]
+  savedJobs      SavedJob[]
+  dismissedJobs  DismissedJob[]
+  discoveredJobs DiscoveredJob[]
+}
+
+/// Vaga que este perfil recusou na descoberta.
+///
+/// Guarda a URL crua, e não um jobId: vaga descartada nunca vira linha em
+/// `Job` — só salvar materializa. É por isso que a URL precisa ser canônica
+/// antes de chegar aqui, senão o mesmo anúncio com dois endereços escapa do
+/// descarte e volta na rodada seguinte.
+///
+/// Empresa, cargo e origem ficam desnormalizados de propósito: sem eles o
+/// "desfazer" morre ao recarregar a página, e numa tela de triagem rápida o
+/// clique errado é comum.
+model DismissedJob {
+  id          String   @id @default(cuid())
+  profileId   String
+  jobUrl      String
+  company     String
+  title       String
+  source      String
+  dismissedAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, jobUrl])
+  @@index([profileId, dismissedAt])
+}
+
+/// Vaga que a descoberta chegou a te MOSTRAR.
+///
+/// A descoberta é sem estado: faz o leque de fontes ao vivo, guarda 15 minutos
+/// em memória e descarta. Sem esta tabela não existe resposta para "quantas
+/// vagas recebi" — `Job.createdAt` é a data em que a vaga foi SALVA, não em
+/// que apareceu.
+///
+/// Grava o lote devolvido, não tudo o que as fontes trouxeram: "recebeu"
+/// significa "foi mostrada a você". As ~2.000 que o leque produz por rodada
+/// são em maioria filtradas e nunca vistas, e contá-las diria que você recebe
+/// duas mil vagas por dia — as mesmas, todo dia.
+///
+/// Por perfil, porque o filtro é por perfil: a mesma vaga mostrada a dois
+/// perfis são dois recebimentos.
+///
+/// É também o denominador que falta — hoje `DismissedJob` existe sem nada
+/// contra o que dividir.
+model DiscoveredJob {
+  id        String @id @default(cuid())
+  profileId String
+
+  /// Canônica, pela mesma `canonicalJobUrl` de `Job.url` e `DismissedJob.jobUrl`.
+  /// Aplicada no ponto de escrita, não assumida — ver `JobService.recordSeen`.
+  url    String
+  source String
+
+  firstSeenAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, url])
+  @@index([profileId, firstSeenAt])
 }
 
 /// A vaga em si. Não tem profileId de propósito: a vaga é da empresa, e dois
@@ -87,10 +161,20 @@ model Job {
 
   stack        String[]
   requirements String[]
+  benefits     String[]
   seniority    String?
   workModel    WorkModel?
+  contractType ContractType?
   location     String?
-  salaryRange  String?
+
+  /// Faixa salarial numérica, e não texto livre: é o que permite a tela de
+  /// métricas responder "qual a faixa das vagas que viraram entrevista?".
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String? @default("BRL")
+
+  /// Jornada semanal em horas.
+  weeklyHours Int?
   /// linkedin, greenhouse, lever, gupy, manual...
   source       String?
   /// Quando o Claude extraiu os campos acima a partir da URL.
@@ -100,6 +184,28 @@ model Job {
   updatedAt DateTime @updatedAt
 
   applications Application[]
+  savedBy      SavedJob[]
+}
+
+/// Vaga guardada por um perfil para aplicar depois.
+///
+/// É entidade própria, e não um campo em Job, porque `Job` não tem
+/// `profileId` de propósito — a vaga é da empresa. Salvar é um ato do perfil,
+/// e dois perfis podem salvar a mesma vaga sem interferir um no outro.
+///
+/// A vaga permanece salva depois de aplicada: a tela troca o botão para
+/// "acompanhar candidatura" em vez de removê-la da lista.
+model SavedJob {
+  id        String   @id @default(cuid())
+  profileId String
+  jobId     String
+  savedAt   DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, jobId])
+  @@index([profileId, savedAt])
 }
 
 /// A candidatura: um perfil aplicando a uma vaga.
@@ -113,6 +219,10 @@ model Application {
   notes     String?
   appliedAt DateTime?
 
+  /// Soft delete. Preenchido, a candidatura deixa de existir para o negócio:
+  /// some da listagem e das métricas. A linha fica só para recuperação.
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -124,10 +234,19 @@ model Application {
   statusEvents StatusEvent[]
   emails       EmailMessage[]
 
-  /// O mesmo perfil não se candidata duas vezes à mesma vaga.
-  @@unique([profileId, jobId])
+  /// NÃO recolocar `@@unique([profileId, jobId])` aqui.
+  ///
+  /// A regra continua valendo — o mesmo perfil não tem duas candidaturas
+  /// ATIVAS para a mesma vaga — mas com soft delete um unique comum quebraria
+  /// o caso de excluir e registrar de novo: a linha excluída seguiria ocupando
+  /// o par. O correto seria um índice parcial (WHERE "deletedAt" IS NULL), que
+  /// o Prisma não expressa no schema: criado por SQL cru, ele vira drift e a
+  /// migration seguinte geraria um DROP dele.
+  ///
+  /// A regra é garantida em ApplicationService.create(), dentro da transação.
   @@index([profileId, status])
   @@index([profileId, updatedAt])
+  @@index([profileId, deletedAt])
 }
 
 /// Histórico de transições. É o que gera as métricas ("quantas viraram
@@ -142,12 +261,25 @@ model StatusEvent {
   source     StatusEventSource  @default(manual)
   note       String?
 
+  /// Quando a mudança ACONTECEU — não quando foi registrada.
+  ///
+  /// São perguntas diferentes: a entrevista foi marcada na segunda, você
+  /// registrou na quarta. Com só `createdAt`, "tempo até a primeira resposta"
+  /// media o seu hábito de registro, não a velocidade da empresa — das
+  /// transições reais do banco, quatro estavam a segundos uma da outra.
+  ///
+  /// O padrão é o momento do registro, e a data pode ser corrigida depois
+  /// pela linha do tempo. Eventos anteriores a esta coluna herdaram o
+  /// `createdAt`, que é o melhor que se sabia deles.
+  occurredAt DateTime @default(now())
+
+  /// Quando o evento foi gravado. Não muda, nem quando `occurredAt` é corrigido.
   createdAt DateTime @default(now())
 
   application  Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   emailMessage EmailMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
 
-  @@index([applicationId, createdAt])
+  @@index([applicationId, occurredAt])
 }
 
 /// Snapshot imutável do CV enviado em uma candidatura. Guardar o conteúdo (e
@@ -188,8 +320,31 @@ model EmailMessage {
   /// instrução. Ver seção 5 do CLAUDE.md.
   bodyText    String?
 
+  /// O servidor de email confirmou que o remetente é quem diz ser (SPF, DKIM
+  /// ou DMARC, para o domínio do "De"). Só email verificado é vinculado
+  /// sozinho e lido pelo modelo — ver `sender-auth.ts`.
+  ///
+  /// Nulo nos emails guardados antes desta coluna: não se sabe, e "não se
+  /// sabe" é tratado como não verificado até uma sincronização reler o email.
+  senderVerified Boolean?
+
   /// Nulo enquanto o job de classificação não rodou.
   processedAt DateTime?
+
+  /// O status que o modelo leu no email. SUGESTÃO, nunca estado: só vira
+  /// `Application.status` quando você confirma (seção 4 do CLAUDE.md).
+  /// Nulo quando o email não indica mudança nenhuma.
+  suggestedStatus      ApplicationStatus?
+  /// Por que o modelo sugeriu — texto GERADO a partir de conteúdo não
+  /// confiável. Vai para a tela como texto, e só.
+  suggestionNote       String?
+  /// Você confirmou ou dispensou. A partir daqui a sugestão não aparece mais.
+  suggestionResolvedAt DateTime?
+
+  /// Você tirou este email da tela de pendentes. A linha fica: apagar faria a
+  /// próxima sincronização trazê-lo de volta como novo, e o "desfazer" não
+  /// teria o que restaurar. Descartado não é revinculado sozinho.
+  dismissedAt DateTime?
 
   createdAt DateTime @default(now())
 

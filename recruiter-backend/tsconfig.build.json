@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // deleteOutDir (nest-cli.json) apaga o dist a cada build; com incremental
+    // ligado o tsc confia no .tsbuildinfo, acha que a saída existe e emite
+    // só o que mudou — resultado: dist pela metade, sem erro nenhum.
+    "incremental": false
   },
   "include": ["src/**/*"],
   "exclude": [

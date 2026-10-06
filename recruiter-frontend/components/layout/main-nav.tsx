@@ -1,0 +1,110 @@
+"use client";
+
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { motion } from "motion/react";
+import {
+  IconBriefcase,
+  IconChart,
+  IconDocument,
+  IconList,
+  IconMail,
+} from "@/components/icons";
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  /** Ausente = sem tela ainda: fica visível e desabilitado. */
+  href?: string;
+}
+
+/**
+ * As seções vêm da lista de funcionalidades da seção 1 do CLAUDE.md — não são
+ * placeholders inventados. Só "Candidaturas" está ativa; as outras aparecem
+ * desabilitadas para a navegação não prometer o que ainda não existe.
+ */
+const items: NavItem[] = [
+  { id: "candidaturas", label: "Candidaturas", icon: <IconList />, href: "/" },
+  { id: "vagas", label: "Vagas", icon: <IconBriefcase />, href: "/vagas" },
+  { id: "curriculo", label: "Currículo", icon: <IconDocument />, href: "/curriculo" },
+  { id: "emails", label: "Emails", icon: <IconMail />, href: "/emails" },
+  { id: "metricas", label: "Métricas", icon: <IconChart />, href: "/metricas" },
+];
+
+/** "/" só casa exato; as demais casam com as subrotas (/vagas/salvas, /vagas/x). */
+function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+export function MainNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav aria-label="Seções" className="min-w-0">
+      <ul className="flex items-center gap-1 overflow-x-auto">
+        {items.map((item) => {
+          const active = item.href ? isActive(pathname, item.href) : false;
+          const className = `group relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+            item.href
+              ? active
+                ? "text-zinc-50"
+                : "text-zinc-400 hover:text-zinc-100"
+              : "cursor-not-allowed text-zinc-600"
+          }`;
+
+          const content = (
+            <>
+              {active && <ActivePill />}
+              <span className="relative transition-transform duration-200 ease-out group-hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0">
+                {item.icon}
+              </span>
+              <span className="relative hidden sm:inline">{item.label}</span>
+            </>
+          );
+
+          return (
+            <li key={item.id}>
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={item.label}
+                  className={`cursor-pointer ${className}`}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <button type="button" disabled title="Em breve" className={className}>
+                  {content}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/**
+ * O fundo do item ativo, que DESLIZA até o próximo quando você troca de tela.
+ *
+ * `layoutId` é o que faz isso: o Motion reconhece que é o "mesmo" elemento em
+ * dois lugares do layout e anima a posição e o tamanho entre eles, por mola.
+ * Sem ele o fundo sumiria de um item e reapareceria no outro, sem viagem.
+ *
+ * Funciona entre páginas porque o cabeçalho vive no layout, que não remonta
+ * na navegação — o elemento sobrevive à troca de rota.
+ */
+function ActivePill() {
+  return (
+    <motion.span
+      layoutId="nav-active"
+      aria-hidden
+      className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-b from-white/12 to-white/4 shadow-[0_0_20px_-6px] shadow-accent/70"
+      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+    />
+  );
+}

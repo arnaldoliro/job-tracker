@@ -1,16 +1,16 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  NEXT_PUBLIC_API_URL: z.url(),
+  API_URL: z.url(),
 });
 
 /**
- * Cada `NEXT_PUBLIC_*` precisa aparecer aqui escrito por extenso.
- * O Next substitui essas referências em build time; uma leitura dinâmica
- * (`process.env[nome]`) não é inlined e chegaria como `undefined` no browser.
+ * `API_URL` e não `NEXT_PUBLIC_API_URL`: todo acesso à API do Nest acontece no
+ * servidor Next (Server Component e Server Action). O navegador nunca fala com
+ * a porta 3333, então não há motivo para embutir a URL no bundle.
  */
 const parsed = envSchema.safeParse({
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  API_URL: process.env.API_URL,
 });
 
 if (!parsed.success) {
