@@ -23,6 +23,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:seed": "prisma db seed",
+    "db:demo": "tsx prisma/demo-seed.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

@@ -20,6 +20,7 @@
     "db:migrate": "npm run prisma:migrate -w recruiter-backend",
     "db:deploy": "npm run prisma:deploy -w recruiter-backend",
     "db:seed": "npm run db:seed -w recruiter-backend",
+    "db:demo": "npm run db:demo -w recruiter-backend",
     "db:studio": "npm run prisma:studio -w recruiter-backend"
   },
   "engines": {
