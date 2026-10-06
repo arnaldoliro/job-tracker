@@ -1,4 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../config/env';
+import { watchlistFrom } from './watchlist';
 import type {
   DiscoverResult,
   JobPreferences,
@@ -57,12 +60,14 @@ export class DiscoveryService {
 
   private readonly sources: DiscoverySource[];
 
-  constructor(prisma: PrismaService) {
+  constructor(prisma: PrismaService, config: ConfigService<Env, true>) {
+    const watchlist = watchlistFrom(config);
+
     this.sources = [
       new GupySource(),
-      new GreenhouseSource(),
-      new AshbySource(),
-      new LeverSource(),
+      new GreenhouseSource(watchlist.greenhouse),
+      new AshbySource(watchlist.ashby),
+      new LeverSource(watchlist.lever),
       new RemoteOkSource(),
       new RemotiveSource(),
       new BrazilPortalsSource(),

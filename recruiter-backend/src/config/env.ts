@@ -10,6 +10,34 @@ const optionalString = z.preprocess(
   z.string().min(1).optional(),
 );
 
+/**
+ * Lista de slugs de board, separados por vírgula.
+ *
+ * O slug entra no caminho da URL da API de cada plataforma, então só passa
+ * o formato que um slug de verdade tem: letras, números e hífen. Uma barra ou
+ * um `?` mudaria o caminho ou a consulta da requisição.
+ */
+const boardList = z.preprocess(
+  (value) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((slug) => slug.trim().toLowerCase())
+          .filter(Boolean)
+      : value,
+  z
+    .array(
+      z
+        .string()
+        .regex(
+          /^[a-z0-9][a-z0-9-]{0,62}$/,
+          'Slug de board inválido: use só letras, números e hífen.',
+        ),
+    )
+    .max(50)
+    .default([]),
+);
+
 export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -64,6 +92,13 @@ export const envSchema = z.object({
    *
    * NÃO usar `z.coerce.boolean()`: ele converte a string "false" em `true`.
    */
+  /**
+   * Boards de empresas que a descoberta lê, separados por vírgula. Ver
+   * `job/discovery/watchlist.ts`.
+   */
+  DISCOVERY_GREENHOUSE_BOARDS: boardList,
+  DISCOVERY_ASHBY_BOARDS: boardList,
+  DISCOVERY_LEVER_BOARDS: boardList,
   IMAP_SYNC_ON_BOOT: z.preprocess(
     (value) => (typeof value === 'string' ? value.trim() === 'true' : value),
     z.boolean().default(true),

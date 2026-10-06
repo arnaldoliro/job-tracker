@@ -12,19 +12,19 @@ import {
 } from '../normalize';
 import type { DiscoverySource } from '../provider';
 import { parseEach } from '../provider';
-import { GREENHOUSE_BOARDS } from '../watchlist';
 
 /**
  * Greenhouse — board por empresa.
  *
  * `content=true` é obrigatório e caro: sem ele não vem descrição, e sem
  * descrição a stack fica vazia e a vaga é sistematicamente rebaixada na
- * ordenação em relação a Ashby e Gupy, que trazem descrição de graça. Medido:
- * a Vercel salta de 61 KB para 886 KB. Board que estourar o teto de 3 MB é
+ * ordenação em relação a Ashby e Gupy, que trazem descrição de graça. Medido
+ * num board real: de 61 KB para 886 KB. Board que estourar o teto de 4 MB é
  * pulado com aviso, e não derruba a rodada.
  *
- * O `metadata` NÃO serve para filtrar por área: a Vercel preenche nas 87 vagas
- * e a Figma em nenhuma das 156. Filtro fica com o título.
+ * O `metadata` NÃO serve para filtrar por área: medido em dois boards reais,
+ * um preenchia em todas as 87 vagas e o outro em nenhuma das 156. Filtro fica
+ * com o título.
  */
 
 const MAX_DESCRIPTION = 4_000;
@@ -44,9 +44,12 @@ const greenhouseBoardSchema = z.object({ jobs: z.array(z.unknown()) });
 export class GreenhouseSource implements DiscoverySource {
   readonly name = 'greenhouse';
 
+  /** Os slugs vêm do `.env` — ver `watchlist.ts`. */
+  constructor(private readonly boards: readonly string[]) {}
+
   async fetch(): Promise<JobSearchResult[]> {
     const boards = await Promise.allSettled(
-      GREENHOUSE_BOARDS.map(async (slug) => {
+      this.boards.map(async (slug) => {
         const payload = greenhouseBoardSchema.safeParse(
           await fetchPublicJson(
             `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`,

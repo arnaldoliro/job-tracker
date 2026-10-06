@@ -1,44 +1,34 @@
+import type { Env } from '../../config/env';
+
 /**
- * Empresas cujo board é lido a cada rodada.
+ * Empresas cujo board público é lido a cada rodada da descoberta.
  *
- * Constante, e não tabela: uma tabela pediria migration, endpoints e uma tela
- * de CRUD para resolver um problema que hoje é editar uma lista. Vira tabela
- * quando você quiser mexer nela sem abrir o editor.
+ * Vem do `.env`, não do código. A lista diz em que empresas você tem
+ * interesse — isso é seu, não do repositório —, e cada pessoa que clona o
+ * projeto monta a dela. Vazia por padrão: Gupy, agregadores remotos, portais
+ * brasileiros e os alertas do LinkedIn funcionam sem lista nenhuma.
  *
- * Todos os slugs abaixo foram verificados contra o endpoint real — slug errado
- * devolve 404 em silêncio, e uma empresa que some da lista sem aviso é pior que
- * uma que nunca esteve.
+ * O slug é a parte do endereço do board: `boards.greenhouse.io/<slug>`,
+ * `jobs.ashbyhq.com/<slug>`, `jobs.lever.co/<slug>`. Slug errado devolve 404
+ * em silêncio e a empresa simplesmente não aparece — confira abrindo o
+ * endereço no navegador antes de colocar na lista.
  *
- * Critério: metade com presença real no Brasil, metade remoto-amigável no
- * exterior. Boards gigantes ficaram de fora de propósito — Anthropic (596
- * vagas), Stripe (616), Databricks (867) e OpenAI (780, 12,9 MB) inundariam a
- * fila com vaga presencial nos EUA, que é o oposto do que a ordenação deveria
- * trazer primeiro.
+ * Vale evitar boards gigantes: um board de 800 vagas, quase todas presenciais
+ * nos EUA, inunda a fila com o oposto do que a ordenação deveria trazer
+ * primeiro, e um acima de 4 MB é cortado pelo teto de `safe-fetch.ts`.
  */
+export interface Watchlist {
+  greenhouse: readonly string[];
+  ashby: readonly string[];
+  lever: readonly string[];
+}
 
-export const GREENHOUSE_BOARDS = [
-  // Brasil
-  'quintoandar',
-  'wildlifestudios',
-  'ebanx',
-  'vtex',
-  'rdstation',
-  // Exterior, remoto-amigável
-  'vercel',
-  'figma',
-  'dropbox',
-  'discord',
-  'gitlab',
-] as const;
-
-export const ASHBY_BOARDS = [
-  'nubank',
-  'linear',
-  'ramp',
-  'vanta',
-  'replit',
-  'cursor',
-] as const;
-
-// Palantir saiu: 5,68 MB num board só, e quase tudo presencial nos EUA.
-export const LEVER_BOARDS = ['spotify'] as const;
+export function watchlistFrom(env: {
+  get<K extends keyof Env>(key: K, options: { infer: true }): Env[K];
+}): Watchlist {
+  return {
+    greenhouse: env.get('DISCOVERY_GREENHOUSE_BOARDS', { infer: true }),
+    ashby: env.get('DISCOVERY_ASHBY_BOARDS', { infer: true }),
+    lever: env.get('DISCOVERY_LEVER_BOARDS', { infer: true }),
+  };
+}

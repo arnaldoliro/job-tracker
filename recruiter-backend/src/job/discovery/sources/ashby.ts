@@ -10,14 +10,13 @@ import {
 } from '../normalize';
 import type { DiscoverySource } from '../provider';
 import { parseEach } from '../provider';
-import { ASHBY_BOARDS } from '../watchlist';
 
 /**
  * Ashby — o formato mais bem estruturado das três fontes por empresa.
  *
  * É a única que declara `isRemote` como booleano, país em campo próprio e
- * descrição já em texto puro, sem HTML. Também é onde está o Nubank, com 122
- * vagas e locais em São Paulo e Belo Horizonte.
+ * descrição já em texto puro, sem HTML. Várias empresas brasileiras publicam
+ * por ele, com locais no Brasil declarados no campo certo.
  */
 
 const MAX_DESCRIPTION = 4_000;
@@ -46,9 +45,12 @@ const ashbyBoardSchema = z.object({ jobs: z.array(z.unknown()) });
 export class AshbySource implements DiscoverySource {
   readonly name = 'ashby';
 
+  /** Os slugs vêm do `.env` — ver `watchlist.ts`. */
+  constructor(private readonly boards: readonly string[]) {}
+
   async fetch(): Promise<JobSearchResult[]> {
     const boards = await Promise.allSettled(
-      ASHBY_BOARDS.map(async (slug) => {
+      this.boards.map(async (slug) => {
         const payload = ashbyBoardSchema.safeParse(
           await fetchPublicJson(
             `https://api.ashbyhq.com/posting-api/job-board/${slug}`,

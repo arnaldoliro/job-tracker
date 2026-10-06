@@ -10,7 +10,6 @@ import {
 } from '../normalize';
 import type { DiscoverySource } from '../provider';
 import { parseEach } from '../provider';
-import { LEVER_BOARDS } from '../watchlist';
 
 /**
  * Lever — board por empresa.
@@ -42,9 +41,12 @@ const leverJobSchema = z.object({
 export class LeverSource implements DiscoverySource {
   readonly name = 'lever';
 
+  /** Os slugs vêm do `.env` — ver `watchlist.ts`. */
+  constructor(private readonly boards: readonly string[]) {}
+
   async fetch(): Promise<JobSearchResult[]> {
     const boards = await Promise.allSettled(
-      LEVER_BOARDS.map(async (slug) => {
+      this.boards.map(async (slug) => {
         const payload = await fetchPublicJson(
           `https://api.lever.co/v0/postings/${slug}?mode=json`,
         );
