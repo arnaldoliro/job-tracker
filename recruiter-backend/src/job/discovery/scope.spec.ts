@@ -18,6 +18,7 @@ function preferences(over: Partial<JobPreferences> = {}): JobPreferences {
     stacks: [],
     titleIncludes: [],
     titleExcludes: [],
+    linkedinMaxAgeDays: 14,
     ...over,
   };
 }
@@ -92,5 +93,44 @@ describe('sem escopo escolhido', () => {
 
     expect(matches(job('Salvador, BA'), qualquer)).toBe(true);
     expect(matches(job('Boston, MA'), qualquer)).toBe(true);
+  });
+});
+
+describe('idade das vagas de alerta do LinkedIn', () => {
+  const HOJE = new Date('2026-10-06T12:00:00Z');
+  const diasAtras = (dias: number) =>
+    new Date(HOJE.getTime() - dias * 86_400_000).toISOString();
+  const vaga = (postedAt: string | null, source = 'linkedin-alerts') => ({
+    ...job(null),
+    postedAt,
+    source,
+  });
+
+  it('corta a vaga mais velha que o limite', () => {
+    expect(matches(vaga(diasAtras(20)), preferences(), HOJE)).toBe(false);
+  });
+
+  it('mantém a vaga dentro do limite', () => {
+    expect(matches(vaga(diasAtras(10)), preferences(), HOJE)).toBe(true);
+  });
+
+  it('respeita o limite escolhido no perfil', () => {
+    expect(
+      matches(
+        vaga(diasAtras(20)),
+        preferences({ linkedinMaxAgeDays: 30 }),
+        HOJE,
+      ),
+    ).toBe(true);
+  });
+
+  it('só vale para o LinkedIn: as outras fontes trazem vaga aberta', () => {
+    expect(
+      matches(vaga(diasAtras(40), 'greenhouse'), preferences(), HOJE),
+    ).toBe(true);
+  });
+
+  it('vaga sem data passa', () => {
+    expect(matches(vaga(null), preferences(), HOJE)).toBe(true);
   });
 });

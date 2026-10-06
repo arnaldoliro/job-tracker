@@ -120,6 +120,20 @@ export const stackLabelSchema = z.enum(STACK_LABELS);
 
 const keyword = z.string().trim().min(1).max(40);
 
+/**
+ * Até quantos dias uma vaga de alerta do LinkedIn ainda aparece.
+ *
+ * O alerta traz título, empresa e link, mas não diz se a vaga ainda aceita
+ * candidatura — e abrir a página para conferir é acesso automatizado ao
+ * LinkedIn, que o contrato proíbe e que arrisca a conta (§5). A idade é o
+ * sinal que sobra: vaga de alerta antigo é a que mais costuma estar fechada.
+ *
+ * O teto é a janela que a fonte lê da caixa; acima disso não há o que mostrar.
+ */
+export const LINKEDIN_MAX_AGE_LIMIT = 45;
+export const DEFAULT_LINKEDIN_MAX_AGE_DAYS = 14;
+export const LINKEDIN_AGE_OPTIONS = [7, 14, 21, 30, 45] as const;
+
 export const jobPreferencesSchema = z.object({
   /** `null` = tanto faz. */
   scope: locationScopeSchema.nullable(),
@@ -132,6 +146,17 @@ export const jobPreferencesSchema = z.object({
   titleIncludes: z.array(keyword).max(30),
   /** Título com qualquer uma destas é descartado. Vence o `titleIncludes`. */
   titleExcludes: z.array(keyword).max(30),
+  /**
+   * Corta só as vagas de alerta do LinkedIn; as outras fontes trazem vaga
+   * aberta por construção. Com padrão, para as preferências gravadas antes
+   * deste campo continuarem válidas.
+   */
+  linkedinMaxAgeDays: z
+    .number()
+    .int()
+    .min(1)
+    .max(LINKEDIN_MAX_AGE_LIMIT)
+    .default(DEFAULT_LINKEDIN_MAX_AGE_DAYS),
 });
 
 export type JobPreferences = z.infer<typeof jobPreferencesSchema>;
@@ -181,6 +206,7 @@ export const defaultJobPreferences: JobPreferences = {
     'estágio',
     'estagio',
   ],
+  linkedinMaxAgeDays: DEFAULT_LINKEDIN_MAX_AGE_DAYS,
 };
 
 /**

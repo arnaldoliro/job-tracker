@@ -47,7 +47,12 @@ export function matchesTerm(job: JobSearchResult, term?: string): boolean {
 export function matches(
   job: JobSearchResult,
   preferences: JobPreferences,
+  now: Date = new Date(),
 ): boolean {
+  if (tooOldLinkedIn(job, preferences, now)) {
+    return false;
+  }
+
   const title = fold(job.title);
 
   if (preferences.titleExcludes.some((term) => title.includes(fold(term)))) {
@@ -86,6 +91,30 @@ export function matches(
   }
 
   return withinScope(job, preferences);
+}
+
+/**
+ * Vaga de alerta do LinkedIn mais velha que o limite que você escolheu.
+ *
+ * `postedAt` dessa fonte é o dia em que a vaga apareceu pela PRIMEIRA vez num
+ * alerta: republicada em alertas seguintes, ela não rejuvenesce. É o mais
+ * perto da data de publicação que dá para saber sem abrir o LinkedIn.
+ *
+ * Sem data, passa — mesma regra dos outros campos: cortar por falta de dado
+ * esconde vaga boa sem você saber.
+ */
+function tooOldLinkedIn(
+  job: JobSearchResult,
+  preferences: JobPreferences,
+  now: Date,
+): boolean {
+  if (job.source !== 'linkedin-alerts' || !job.postedAt) {
+    return false;
+  }
+
+  const age = now.getTime() - new Date(job.postedAt).getTime();
+
+  return age > preferences.linkedinMaxAgeDays * 24 * 60 * 60 * 1000;
 }
 
 function withinScope(

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CONTRACT_TYPES,
+  DEFAULT_LINKEDIN_MAX_AGE_DAYS,
+  LINKEDIN_AGE_OPTIONS,
   LOCATION_SCOPES,
   SENIORITIES,
   STACK_LABELS,
@@ -166,6 +168,20 @@ export function FiltersModal({
           </Group>
 
           <Group
+            title="Vagas do LinkedIn"
+            hint="Os alertas do LinkedIn não dizem se a vaga ainda aceita candidatura, e o app não abre o site para conferir. Vaga de alerta antigo é a que mais costuma estar fechada: escolha até quantos dias ela ainda aparece."
+          >
+            {LINKEDIN_AGE_OPTIONS.map((days) => (
+              <Chip
+                key={days}
+                label={`até ${days} dias`}
+                active={draft.linkedinMaxAgeDays === days}
+                onClick={() => patch({ linkedinMaxAgeDays: days })}
+              />
+            ))}
+          </Group>
+
+          <Group
             title="Tecnologias"
             hint="Estas PRIORIZAM, não cortam: marcar Go sobe as vagas de Go sem esconder as outras."
           >
@@ -193,6 +209,7 @@ export function FiltersModal({
                 contractTypes: [],
                 seniorities: [],
                 stacks: [],
+                linkedinMaxAgeDays: DEFAULT_LINKEDIN_MAX_AGE_DAYS,
               })
             }
             className="cursor-pointer text-sm text-zinc-500 underline underline-offset-4 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
