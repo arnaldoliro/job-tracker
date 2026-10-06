@@ -189,7 +189,7 @@ function early(status: ApplicationStatus): number {
 export function fold(text: string): string {
   return text
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
 }

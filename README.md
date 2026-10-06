@@ -26,6 +26,10 @@ currículo com PDF e versões, preenchimento de formulário e painel.
 Depende de chave da Anthropic com crédito: a extração de vaga por URL e a
 sugestão de status a partir do email.
 
+Também depende da chave: as respostas para perguntas de formulário. Texto
+escrito pelo Claude carrega a marca d'água estatística da Anthropic, por isso
+o modo padrão é o de tópicos, em que você escreve a resposta.
+
 Ainda não existe: sugestões de reescrita do currículo para cada vaga.
 
 ## O que ele faz
@@ -58,6 +62,14 @@ mandou para cada empresa.
 
 **Preenchimento de formulário.** Abre o formulário da vaga num Chrome, preenche
 nome, email, telefone e links, e **para**. Você revisa e envia.
+
+**Perguntas do formulário.** Na página da vaga, cole a pergunta aberta do
+formulário ("por que você quer trabalhar aqui?") e o Claude, com o seu
+currículo e a vaga, devolve um roteiro do que responder ou um rascunho. Ele só
+afirma o que o currículo ou as suas anotações sustentam, e a tela avisa o que
+não conseguiu apoiar: afirmações sem trecho correspondente no currículo,
+números que não aparecem em lugar nenhum e expressões com cara de texto de
+IA. Nada é preenchido nem enviado; o texto fica para você editar e copiar.
 
 **Painel.** Funil de candidaturas, tempo até a primeira resposta, aproveitamento
 de cada fonte de vaga, e o ritmo dos emails.

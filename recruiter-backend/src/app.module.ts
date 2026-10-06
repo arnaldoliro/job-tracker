@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
+import { AnswersModule } from './answers/answers.module';
 import { AppService } from './app.service';
 import { ApplicationModule } from './application/application.module';
 import { EmailModule } from './email/email.module';
@@ -25,6 +26,7 @@ import { ProfileModule } from './profile/profile.module';
     EmailModule,
     MetricsModule,
     FormFillModule,
+    AnswersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

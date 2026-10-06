@@ -565,7 +565,7 @@ function measure(trigger: HTMLElement, width: number, wanted: number): Position 
 function fold(text: string): string {
   return text
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
 }
