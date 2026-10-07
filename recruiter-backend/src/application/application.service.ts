@@ -7,11 +7,13 @@ import {
 import type {
   Application,
   CreateApplicationInput,
+  FollowUpAction,
   Resume,
   UpdateApplicationInput,
 } from '@recruit/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { active } from './active';
+import { nextFollowUpAfter } from './follow-up';
 import { fingerprint, labelFor, snapshotOf } from './resume-snapshot';
 import type { ApplicationModel, JobModel } from '../generated/prisma/models';
 
@@ -275,6 +277,28 @@ export class ApplicationService {
     });
 
     return toApplicationDto(row);
+  }
+
+  /** Registra que você agiu sobre o lembrete de follow-up desta candidatura. */
+  async recordFollowUp(id: string, action: FollowUpAction): Promise<void> {
+    const current = await this.prisma.application.findFirst({
+      where: { id, ...active },
+      select: { status: true },
+    });
+
+    if (!current) {
+      throw new NotFoundException({
+        error: 'Not Found',
+        message: 'Candidatura não encontrada',
+      });
+    }
+
+    await this.prisma.application.update({
+      where: { id },
+      data: {
+        nextFollowUpAt: nextFollowUpAfter(action, current.status, new Date()),
+      },
+    });
   }
 
   /** Soft delete: a linha fica, o negócio deixa de enxergá-la. */

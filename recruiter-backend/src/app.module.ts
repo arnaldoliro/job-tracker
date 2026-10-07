@@ -11,6 +11,7 @@ import { MetricsModule } from './metrics/metrics.module';
 import { validateEnv } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
+import { TodayModule } from './today/today.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ProfileModule } from './profile/profile.module';
     MetricsModule,
     FormFillModule,
     AnswersModule,
+    TodayModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -12,4 +12,5 @@ export * from './profile';
 export * from './resume';
 export * from './resume-import';
 export * from './status-event';
+export * from './today';
 export * from './watched-company';
