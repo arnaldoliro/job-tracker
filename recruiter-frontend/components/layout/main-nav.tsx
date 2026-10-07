@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import {
   IconBriefcase,
+  IconCalendar,
   IconChart,
   IconDocument,
   IconList,
@@ -26,6 +27,7 @@ interface NavItem {
  * desabilitadas para a navegação não prometer o que ainda não existe.
  */
 const items: NavItem[] = [
+  { id: "hoje", label: "Hoje", icon: <IconCalendar />, href: "/hoje" },
   { id: "candidaturas", label: "Candidaturas", icon: <IconList />, href: "/" },
   { id: "vagas", label: "Vagas", icon: <IconBriefcase />, href: "/vagas" },
   { id: "curriculo", label: "Currículo", icon: <IconDocument />, href: "/curriculo" },
