@@ -189,7 +189,9 @@ function SavedCard({
               </button>
             )}
 
-            {/* A vaga não sai da lista ao ser aplicada: o botão é que muda. */}
+            {/* A vaga não sai da lista ao ser aplicada: o botão é que muda.
+                "Já me candidatei" registra como aplicado, com a data de hoje:
+                é o clique depois de enviar no site da empresa. */}
             {application ? (
               <Link
                 href="/"
@@ -204,7 +206,7 @@ function SavedCard({
                 onClick={() => run(() => applyToJobAction(profileId, job.id))}
                 className="cursor-pointer rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
               >
-                {pending ? "Aplicando…" : "Aplicar"}
+                {pending ? "Registrando…" : "Já me candidatei"}
               </button>
             )}
 

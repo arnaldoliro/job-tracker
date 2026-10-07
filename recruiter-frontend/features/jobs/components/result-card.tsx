@@ -6,6 +6,7 @@ import { IconBookmark, IconExternalLink, IconX } from "@/components/icons";
 import { Tilt } from "@/components/motion";
 import {
   dismissJobAction,
+  markAppliedAction,
   saveJobAction,
   undismissJobAction,
 } from "@/features/jobs/actions";
@@ -97,6 +98,7 @@ export function ResultCard({
   // Estado local, e não só a prop: depois de salvar, o card confirma na hora,
   // sem depender de a página inteira revalidar.
   const [saved, setSaved] = useState(item.saved);
+  const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const salary = formatSalary(result);
@@ -115,6 +117,24 @@ export function ResultCard({
 
       setSaved(true);
       setDismissed(false);
+    });
+  };
+
+  // Salva e registra a candidatura como "aplicado", num clique: é o que se
+  // faz logo depois de enviar no site da empresa.
+  const markApplied = () => {
+    setError(null);
+    startTransition(async () => {
+      const outcome = await markAppliedAction(profileId, result);
+
+      if (outcome.status === "error") {
+        setError(outcome.message);
+
+        return;
+      }
+
+      setSaved(true);
+      setApplied(true);
     });
   };
 
@@ -257,7 +277,14 @@ export function ResultCard({
               </button>
             )}
 
-            {saved ? (
+            {applied ? (
+              <Link
+                href="/"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-emerald-700 underline underline-offset-4 transition hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+              >
+                Candidatura registrada — acompanhar
+              </Link>
+            ) : saved ? (
               <Link
                 href="/vagas/salvas"
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-emerald-700 underline underline-offset-4 transition hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
@@ -274,6 +301,18 @@ export function ResultCard({
               >
                 <IconBookmark />
                 {pending ? "Salvando…" : "Salvar"}
+              </button>
+            )}
+
+            {!applied && (
+              <button
+                type="button"
+                onClick={markApplied}
+                disabled={pending}
+                title="Já enviei a candidatura no site da empresa: salva a vaga e registra como aplicado, com a data de hoje"
+                className="cursor-pointer rounded-lg border border-emerald-600/40 px-3 py-1.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+              >
+                Já me candidatei
               </button>
             )}
           </div>

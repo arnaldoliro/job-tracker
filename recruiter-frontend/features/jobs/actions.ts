@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import type {
   FillReport, DiscoverResult, JobSearchResult, JobSort } from "@recruit/shared";
-import { createApplication } from "@/features/applications/api";
+import {
+  ApiError as ApplicationApiError,
+  createApplication,
+} from "@/features/applications/api";
 import {
   ApiError,
   discoverJobs,
@@ -17,7 +20,7 @@ import {
 import type { JobActionState } from "@/features/jobs/types";
 
 function toError(error: unknown, fallback: string): JobActionState {
-  if (error instanceof ApiError) {
+  if (error instanceof ApiError || error instanceof ApplicationApiError) {
     return { status: "error", message: error.message };
   }
 
@@ -97,13 +100,59 @@ export async function applyToJobAction(
   jobId: string,
 ): Promise<JobActionState> {
   try {
-    await createApplication({ profileId, jobId });
+    await registerApplied(profileId, jobId);
     revalidatePath("/");
     revalidatePath("/vagas/salvas");
 
     return { status: "success" };
   } catch (error) {
     return toError(error, "Não foi possível registrar a candidatura.");
+  }
+}
+
+/**
+ * "Já me candidatei" direto do card da busca: salva a vaga (salvar é
+ * idempotente) e registra a candidatura nela, num clique só.
+ */
+export async function markAppliedAction(
+  profileId: string,
+  result: JobSearchResult,
+): Promise<JobActionState> {
+  try {
+    const saved = await saveJob(profileId, result);
+
+    await registerApplied(profileId, saved.jobId);
+    revalidatePath("/");
+    revalidatePath("/vagas/salvas");
+
+    return { status: "success" };
+  } catch (error) {
+    return toError(error, "Não foi possível registrar a candidatura.");
+  }
+}
+
+/**
+ * A candidatura de quem JÁ se candidatou: status "aplicado" e data de envio
+ * de agora. Antes ela nascia como "rascunho", e o lembrete cobrava em três
+ * dias "envie ou descarte" uma candidatura já enviada.
+ *
+ * Candidatura ativa que já existe para a vaga não é erro aqui: o clique
+ * repetido (ou o cadastro manual feito antes) quer dizer a mesma coisa.
+ */
+async function registerApplied(profileId: string, jobId: string): Promise<void> {
+  try {
+    await createApplication({
+      profileId,
+      jobId,
+      status: "aplicado",
+      appliedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof ApplicationApiError && error.status === 409) {
+      return;
+    }
+
+    throw error;
   }
 }
 
