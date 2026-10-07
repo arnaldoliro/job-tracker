@@ -11,6 +11,7 @@ import type {
   UpdateApplicationInput,
 } from '@recruit/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { canonicalJobUrl } from '../job/discovery/canonical-url';
 import { active } from './active';
 import { fingerprint, labelFor, snapshotOf } from './resume-snapshot';
 import type { ApplicationModel, JobModel } from '../generated/prisma/models';
@@ -129,8 +130,17 @@ export class ApplicationService {
         job = saved;
       } else {
         // Mesma URL é a mesma vaga: colar o link duas vezes não cria duplicata.
-        const existingJob = input.url
-          ? await tx.job.findUnique({ where: { url: input.url } })
+        //
+        // Pela forma CANÔNICA, a mesma que a busca e o "Salvar" gravam. O link
+        // colado costuma vir do navegador com enfeite — o nome da vaga depois
+        // do id na InHire, o token de canal na Gupy, `?utm_source=` — e,
+        // comparado cru, não achava a vaga salva: a candidatura ganhava uma
+        // vaga nova, e a salva seguia como "sem candidatura".
+        const url = input.url
+          ? (canonicalJobUrl(input.url) ?? input.url)
+          : null;
+        const existingJob = url
+          ? await tx.job.findUnique({ where: { url } })
           : null;
 
         job =
@@ -139,7 +149,7 @@ export class ApplicationService {
             data: {
               company: input.company as string,
               title: input.title as string,
-              url: input.url ?? null,
+              url,
               source: 'manual',
             },
           }));
