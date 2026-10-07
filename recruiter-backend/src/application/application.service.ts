@@ -243,6 +243,10 @@ export class ApplicationService {
         where: { id },
         data: {
           ...(input.status !== undefined && { status: input.status }),
+          // Status novo, relógio novo: o lembrete volta a valer pela regra
+          // do status que acabou de começar.
+          ...(input.status !== undefined &&
+            input.status !== current.status && { nextFollowUpAt: null }),
           ...(input.notes !== undefined && { notes: input.notes }),
           ...(input.appliedAt !== undefined && {
             appliedAt: input.appliedAt ? new Date(input.appliedAt) : null,
