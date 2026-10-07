@@ -173,14 +173,32 @@ export function seniorityFromTitle(title: string): Seniority | null {
  *
  * A chave é o que se procura; o valor é como se escreve na tela.
  */
-const STACK_VOCABULARY: [RegExp, string][] = [
+export const STACK_VOCABULARY: [RegExp, string][] = [
   [/\btypescript\b/, 'TypeScript'],
   [/\bjavascript\b|\bjs\b/, 'JavaScript'],
   [/\bnode\.?js\b|\bnode\b/, 'Node.js'],
   [/\breact\.?js\b|\breact\b/, 'React'],
   [/\bnext\.?js\b/, 'Next.js'],
+  [/\bgatsby(?:\.?js)?\b/, 'Gatsby'],
   [/\bvue\.?js\b|\bvue\b/, 'Vue'],
+  // Sem \b no fim: "nuxt3" e "nuxtjs" são como a vaga costuma escrever.
+  [/\bnuxt/, 'Nuxt'],
   [/\bangular\b/, 'Angular'],
+  [/\btailwind/, 'Tailwind'],
+  [/\bsass\b|\bscss\b/, 'Sass'],
+  [/\bdesign systems?\b|\bstorybook\b/, 'Design System'],
+  // Sem "accessibility" solto: as vagas dos EUA trazem um parágrafo padrão
+  // sobre "accessibility accommodations" no processo seletivo, e as da Gupy
+  // falam de acessibilidade em vaga afirmativa PcD. Nenhum dos dois é a
+  // competência técnica, então só entra a forma que a vaga usa para pedi-la.
+  [
+    /\bwcag\b|\ba11y\b|\b(?:web|digital) accessibility\b|\baccessibility (?:standards|best practices|guidelines)\b|\bacessibilidade (?:web|digital)\b/,
+    'Acessibilidade',
+  ],
+  [
+    /\bhighcharts\b|\bd3\.?js\b|\bchart\.?js\b|\becharts\b|\brecharts\b/,
+    'Visualização de dados',
+  ],
   [/\bpython\b/, 'Python'],
   [/\bdjango\b/, 'Django'],
   [/\bfastapi\b/, 'FastAPI'],
@@ -195,6 +213,8 @@ const STACK_VOCABULARY: [RegExp, string][] = [
   [/\brails\b/, 'Rails'],
   [/\bphp\b/, 'PHP'],
   [/\blaravel\b/, 'Laravel'],
+  [/\bdrupal\b/, 'Drupal'],
+  [/\bwordpress\b|\bwoocommerce\b/, 'WordPress'],
   // \b não serve para símbolo: entre um espaço e um "." não há fronteira de
   // palavra, então /\b\.net\b/ e /\bc#\b/ nunca casavam. Verificado.
   [
