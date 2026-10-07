@@ -300,8 +300,10 @@ export function contractTypeFromLabel(
     return 'estagio';
   }
 
+  // A Gupy escreve o tipo como identificador ("vacancy_legal_entity"), não
+  // como frase: sem o sublinhado, nenhuma vaga PJ dela era reconhecida.
   if (
-    /temporar|contract|freelanc|autonom|legal entity|pessoa juridica|\bpj\b/.test(
+    /temporar|contract|freelanc|autonom|legal[ _]entity|pessoa juridica|\bpj\b/.test(
       value,
     )
   ) {
