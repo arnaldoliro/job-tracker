@@ -223,6 +223,14 @@ model Application {
   /// some da listagem e das métricas. A linha fica só para recuperação.
   deletedAt DateTime?
 
+  /// Quando o próximo lembrete de follow-up vence, se você já agiu sobre ele.
+  ///
+  /// Nulo é o caso comum: o lembrete vence pela regra do status (a última
+  /// mudança mais o prazo daquele status — ver `follow-up.ts`). Preenchido por
+  /// "fiz o follow-up" ou "adiar", e zerado a cada mudança de status: status
+  /// novo, relógio novo.
+  nextFollowUpAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

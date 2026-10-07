@@ -12,12 +12,14 @@ import {
 } from '@nestjs/common';
 import {
   createApplicationSchema,
+  followUpActionSchema,
   setEventDateSchema,
   updateApplicationSchema,
 } from '@recruit/shared';
 import type {
   Application,
   CreateApplicationInput,
+  FollowUpAction,
   Resume,
   SetEventDateInput,
   UpdateApplicationInput,
@@ -72,6 +74,20 @@ export class ApplicationController {
       eventId,
       new Date(input.occurredAt),
     );
+  }
+
+  /**
+   * "Fiz o follow-up" ou "adiar" — muda só quando o próximo lembrete vence.
+   * Não é mudança de status: nada entra na linha do tempo.
+   */
+  @Patch(':id/follow-up')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  followUp(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(followUpActionSchema))
+    input: { action: FollowUpAction },
+  ): Promise<void> {
+    return this.applicationService.recordFollowUp(id, input.action);
   }
 
   /** O currículo como foi enviado nesta candidatura. */

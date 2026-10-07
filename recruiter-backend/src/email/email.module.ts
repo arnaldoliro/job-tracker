@@ -18,5 +18,7 @@ import { EmailService } from './email.service';
     EmailResolverService,
     EmailBootSync,
   ],
+  // A tela "Hoje" conta as sugestões pendentes pela mesma regra desta tela.
+  exports: [EmailService],
 })
 export class EmailModule {}
