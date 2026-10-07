@@ -5,6 +5,7 @@ import {
   CONTRACT_TYPES,
   DEFAULT_LINKEDIN_MAX_AGE_DAYS,
   LINKEDIN_AGE_OPTIONS,
+  LINKEDIN_MAX_AGE_LIMIT,
   LOCATION_SCOPES,
   SENIORITIES,
   STACK_LABELS,
@@ -106,8 +107,13 @@ export function FiltersModal({
         <div className="flex flex-col gap-6 overflow-y-auto px-5 py-5">
           <Group
             title="Localização"
-            hint="Marcar uma desmarca a outra. Nenhuma marcada é tanto faz."
+            hint="Marcar uma desmarca a outra."
           >
+            <AllChip
+              label="todas"
+              active={draft.scope === null}
+              onClick={() => patch({ scope: null })}
+            />
             {LOCATION_SCOPES.map((scope) => (
               <Chip
                 key={scope}
@@ -123,6 +129,11 @@ export function FiltersModal({
           </Group>
 
           <Group title="Modalidade" hint="Vaga que não declarou continua aparecendo.">
+            <AllChip
+              label="todas"
+              active={draft.workModels.length === 0}
+              onClick={() => patch({ workModels: [] })}
+            />
             {WORK_MODELS.map((model) => (
               <Chip
                 key={model}
@@ -139,6 +150,11 @@ export function FiltersModal({
             title="Contrato"
             hint="Só a Gupy declara isso de forma confiável; as demais deixam em branco."
           >
+            <AllChip
+              label="todos"
+              active={draft.contractTypes.length === 0}
+              onClick={() => patch({ contractTypes: [] })}
+            />
             {CONTRACT_TYPES.map((type) => (
               <Chip
                 key={type}
@@ -155,6 +171,11 @@ export function FiltersModal({
             title="Senioridade"
             hint="Deduzida do título — nenhum portal declara este campo."
           >
+            <AllChip
+              label="todas"
+              active={draft.seniorities.length === 0}
+              onClick={() => patch({ seniorities: [] })}
+            />
             {SENIORITIES.map((level) => (
               <Chip
                 key={level}
@@ -174,7 +195,13 @@ export function FiltersModal({
             {LINKEDIN_AGE_OPTIONS.map((days) => (
               <Chip
                 key={days}
-                label={`até ${days} dias`}
+                // O teto é tudo o que a fonte lê da caixa: acima dele não há
+                // vaga de alerta para mostrar, então "todas" é exato.
+                label={
+                  days === LINKEDIN_MAX_AGE_LIMIT
+                    ? `todas (até ${days} dias)`
+                    : `até ${days} dias`
+                }
                 active={draft.linkedinMaxAgeDays === days}
                 onClick={() => patch({ linkedinMaxAgeDays: days })}
               />
@@ -185,6 +212,11 @@ export function FiltersModal({
             title="Tecnologias"
             hint="Estas PRIORIZAM, não cortam: marcar Go sobe as vagas de Go sem esconder as outras."
           >
+            <AllChip
+              label="todas"
+              active={draft.stacks.length === 0}
+              onClick={() => patch({ stacks: [] })}
+            />
             {STACK_LABELS.map((label) => (
               <Chip
                 key={label}
@@ -283,6 +315,18 @@ function Chip({
       {label}
     </button>
   );
+}
+
+/**
+ * "Todas" é o estado vazio do grupo, com nome. Lista vazia já significava
+ * "tanto faz" (ver `jobPreferencesSchema`), mas a tela não dizia: com nada
+ * marcado, não dava para saber se o grupo estava liberado ou esquecido.
+ *
+ * Por isso não é um valor a mais no schema: marcar "todas" esvazia a lista, e
+ * marcar qualquer opção desmarca "todas" por consequência.
+ */
+function AllChip(props: { label: string; active: boolean; onClick: () => void }) {
+  return <Chip {...props} />;
 }
 
 export function countMarked(preferences: JobPreferences): number {
