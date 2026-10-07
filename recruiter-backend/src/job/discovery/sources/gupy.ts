@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { JobSearchResult } from '@recruit/shared';
 import { htmlToText } from '../../html-to-text';
-import { fetchPublicJson } from '../../safe-fetch';
+import { fetchPublicPage } from '../../safe-fetch';
 import { canonicalJobUrl } from '../canonical-url';
 import {
   contractTypeFromLabel,
@@ -19,12 +19,29 @@ import { parseEach } from '../provider';
  * fonte aqui que declara modalidade E tipo de contrato em campos próprios: o
  * `type` mapeia direto para o enum do projeto (efetivo = CLT, pessoa jurídica =
  * PJ, estágio, temporário), o que nenhum ATS internacional consegue dar.
+ *
+ * Lê a PÁGINA de busca do portal, e não uma API. A API pública
+ * (`employability-portal.gupy.io/api/v1/jobs`) passou a responder 404 para
+ * tudo em outubro de 2026: o portal agora busca pelo próprio servidor, por
+ * endereço interno. A página renderizada traz as mesmas vagas, com os mesmos
+ * campos, no JSON que o Next embute em `__NEXT_DATA__`. O `robots.txt` do
+ * portal não proíbe nada.
  */
 
-const ENDPOINT = 'https://employability-portal.gupy.io/api/v1/jobs';
+const SEARCH_URL = 'https://portal.gupy.io/job-search';
 
-const PAGE_SIZE = 100;
-const MAX_PAGES = 2;
+/** O portal devolve 12 por página, e não aceita outro tamanho. */
+const PAGE_SIZE = 12;
+
+/**
+ * Cinco páginas por termo: 60 vagas, as mais recentes. Era uma requisição de
+ * 100 vagas; agora cada 12 custam uma página inteira, e a regra de ritmo
+ * humano do §5 vale mais que o volume.
+ */
+const MAX_PAGES = 5;
+
+/** Ritmo humano entre páginas do mesmo termo — §5. */
+const DELAY_MS = 250;
 
 /** Sem termo, a Gupy devolve o acervo inteiro — e a maioria não é vaga técnica. */
 const DEFAULT_TERMS = ['desenvolvedor', 'engenheiro de software', 'backend'];
@@ -46,41 +63,113 @@ const gupyJobSchema = z.object({
   country: z.string().nullish(),
 });
 
-const gupyPageSchema = z.object({ data: z.array(z.unknown()) });
+const nextDataSchema = z.object({
+  props: z.object({
+    pageProps: z.object({
+      initialJobList: z.object({ data: z.array(z.unknown()) }),
+    }),
+  }),
+});
+
+const NEXT_DATA = /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/;
+
+/**
+ * As vagas cruas de uma página de busca, ou `null` quando a página não tem a
+ * forma esperada.
+ *
+ * `null`, e não lista vazia, de propósito: "a busca não achou nada" e "o
+ * portal mudou o layout" precisam ser distinguíveis, senão a fonte vira zero
+ * vagas em silêncio — foi exatamente assim que a troca da API passou
+ * despercebida.
+ */
+export function readGupySearchPage(html: string): unknown[] | null {
+  const match = NEXT_DATA.exec(html);
+
+  if (!match) {
+    return null;
+  }
+
+  let json: unknown;
+
+  try {
+    json = JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+
+  const parsed = nextDataSchema.safeParse(json);
+
+  return parsed.success
+    ? parsed.data.props.pageProps.initialJobList.data
+    : null;
+}
 
 export class GupySource implements DiscoverySource {
   readonly name = 'gupy';
+
+  /** Uma página por 12 vagas: precisa de mais fôlego que uma API. */
+  readonly deadlineMs = 30_000;
 
   async fetch(query: DiscoveryQuery): Promise<JobSearchResult[]> {
     const terms = query.q?.trim() ? [query.q.trim()] : DEFAULT_TERMS;
     const byUrl = new Map<string, JobSearchResult>();
 
-    for (const term of terms) {
-      for (let page = 0; page < MAX_PAGES; page += 1) {
-        const url =
-          `${ENDPOINT}?jobName=${encodeURIComponent(term)}` +
-          `&offset=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`;
+    // Termos em paralelo, páginas de cada termo em sequência: são no máximo
+    // três requisições simultâneas ao portal.
+    const perTerm = await Promise.allSettled(
+      terms.map((term) => this.readTerm(term)),
+    );
 
-        const payload = gupyPageSchema.safeParse(await fetchPublicJson(url));
+    // Um termo que falha não derruba os outros. Só quando todos falham a
+    // fonte inteira é dada como fora do ar.
+    const failure = perTerm.find((outcome) => outcome.status === 'rejected');
 
-        if (!payload.success || payload.data.data.length === 0) {
-          break;
-        }
+    if (failure && perTerm.every((outcome) => outcome.status === 'rejected')) {
+      throw failure.reason;
+    }
 
-        const { ok } = parseEach(payload.data.data, toResult);
-
-        for (const item of ok) {
+    for (const outcome of perTerm) {
+      if (outcome.status === 'fulfilled') {
+        for (const item of outcome.value) {
           byUrl.set(item.url, item);
-        }
-
-        if (payload.data.data.length < PAGE_SIZE) {
-          break;
         }
       }
     }
 
     return [...byUrl.values()];
   }
+
+  private async readTerm(term: string): Promise<JobSearchResult[]> {
+    const found: JobSearchResult[] = [];
+
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const { html } = await fetchPublicPage(
+        `${SEARCH_URL}/term=${encodeURIComponent(term)}&page=${page}`,
+      );
+      const raw = readGupySearchPage(html);
+
+      if (raw === null) {
+        // Falha, e não lista vazia: aparece em `failedSources` na tela.
+        throw new Error(
+          'página de busca sem a lista de vagas — o layout mudou',
+        );
+      }
+
+      found.push(...parseEach(raw, toResult).ok);
+
+      if (raw.length < PAGE_SIZE) {
+        break;
+      }
+
+      await sleep(DELAY_MS);
+    }
+
+    return found;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function toResult(raw: unknown): JobSearchResult | null {
