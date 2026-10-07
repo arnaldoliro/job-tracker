@@ -196,6 +196,7 @@ export function ResultCard({
               >
                 {result.title}
               </span>
+              <PostedAt postedAt={result.postedAt} source={result.source} />
             </div>
             <span
               className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
@@ -328,3 +329,58 @@ function OtherPostings({ others }: { others: JobVariant[] }) {
     </details>
   );
 }
+
+/**
+ * Quando a vaga foi publicada, em tempo relativo — "há 3 dias" diz mais numa
+ * lista que "04/10/2026" — com a data exata ao passar o mouse.
+ *
+ * Vaga nova tem menos gente concorrendo, então até três dias ganha destaque.
+ * Sem data (a Programathor não informa), não mostra nada em vez de inventar.
+ *
+ * No alerta do LinkedIn a data é a do PRIMEIRO alerta em que a vaga apareceu,
+ * não a da publicação: o rótulo diz isso.
+ */
+function PostedAt({
+  postedAt,
+  source,
+}: {
+  postedAt: string | null;
+  source: string;
+}) {
+  // "Agora" capturado uma vez, na montagem: ler o relógio a cada render faria
+  // o texto mudar sozinho entre renders.
+  const [now] = useState(() => Date.now());
+
+  if (!postedAt) {
+    return null;
+  }
+
+  const date = new Date(postedAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const days = Math.floor((now - date.getTime()) / (24 * 60 * 60 * 1000));
+  const fresh = days <= 3;
+  const verb = source === "linkedin-alerts" ? "no alerta" : "publicada";
+
+  return (
+    <span
+      className={`text-xs ${fresh ? "font-medium text-emerald-700 dark:text-emerald-400" : "text-zinc-500 dark:text-zinc-400"}`}
+      title={date.toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" })}
+    >
+      {verb} {relativeDays(days)}
+    </span>
+  );
+}
+
+function relativeDays(days: number): string {
+  if (days <= 0) return "hoje";
+  if (days === 1) return "ontem";
+  if (days < 14) return `há ${days} dias`;
+  if (days < 60) return `há ${Math.floor(days / 7)} semanas`;
+
+  return `há ${Math.floor(days / 30)} meses`;
+}
+
