@@ -1,5 +1,10 @@
 import { STACK_LABELS } from '@recruit/shared';
-import { countryFromText, STACK_VOCABULARY, stackFromText } from './normalize';
+import {
+  contractTypeFromLabel,
+  countryFromText,
+  STACK_VOCABULARY,
+  stackFromText,
+} from './normalize';
 
 /**
  * Localização brasileira.
@@ -122,5 +127,27 @@ describe('STACK_VOCABULARY', () => {
     const detected = [...new Set(STACK_VOCABULARY.map(([, label]) => label))];
 
     expect([...detected].sort()).toEqual([...STACK_LABELS].sort());
+  });
+});
+
+/**
+ * Os valores de `type` abaixo são os que a Gupy usa de verdade, medidos no
+ * portal em outubro de 2026.
+ */
+describe('contractTypeFromLabel', () => {
+  it.each([
+    ['vacancy_type_effective', 'clt'],
+    ['vacancy_legal_entity', 'pj'],
+    ['vacancy_type_autonomous', 'pj'],
+    ['vacancy_type_internship', 'estagio'],
+    ['vacancy_type_temporary', 'temporario'],
+    ['Legal Entity', 'pj'],
+  ])('%s vira %s', (label, expected) => {
+    expect(contractTypeFromLabel(label)).toBe(expected);
+  });
+
+  it('não chuta terceirizado nem banco de talentos', () => {
+    expect(contractTypeFromLabel('vacancy_type_outsource')).toBeNull();
+    expect(contractTypeFromLabel('vacancy_type_talent_pool')).toBeNull();
   });
 });

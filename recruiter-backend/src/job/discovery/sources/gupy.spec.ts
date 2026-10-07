@@ -107,7 +107,7 @@ describe('GupySource', () => {
       location: 'Salvador, Bahia',
       stack: ['Vue', 'Nuxt', 'Tailwind'],
     });
-    expect(jobs[1]).toMatchObject({ workModel: 'hibrido' });
+    expect(jobs[1]).toMatchObject({ workModel: 'hibrido', contractType: 'pj' });
   });
 
   it('pagina até a página incompleta, com o termo no endereço', async () => {
