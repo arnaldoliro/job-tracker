@@ -226,7 +226,10 @@ export function JobDiscovery({
       <section className="cine-reveal cine-glass flex flex-col gap-3 rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold">Procurar vagas</h2>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 className="text-lg font-semibold">Procurar vagas</h2>
+              <Counter items={items.length} total={total} />
+            </div>
             <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               Enquanto ligada, traz vagas de Gupy, Greenhouse, Ashby, Lever e
               agregadores de remoto. Nada é gravado até você salvar.
@@ -318,7 +321,6 @@ export function JobDiscovery({
 
         <Status
           items={items.length}
-          total={total}
           pending={pending}
           exhausted={exhausted}
           failed={failed}
@@ -364,9 +366,33 @@ export function JobDiscovery({
   );
 }
 
+/**
+ * Quantas vagas passam no filtro, ao lado do título.
+ *
+ * O total é o que importa ao ajustar o filtro — é ele que diz se o critério
+ * novo cortou demais —, e antes ficava numa linha miúda abaixo da busca.
+ * "Na tela" só aparece enquanto há mais para carregar: igual ao total, seria
+ * o mesmo número duas vezes.
+ */
+function Counter({ items, total }: { items: number; total: number | null }) {
+  if (total === null) {
+    return null;
+  }
+
+  return (
+    <span className="flex items-baseline gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+      <span className="rounded-full bg-zinc-900 px-2.5 py-0.5 text-xs font-semibold text-white tabular-nums dark:bg-zinc-100 dark:text-zinc-900">
+        {total} {total === 1 ? "vaga" : "vagas"}
+      </span>
+      {items < total && (
+        <span className="text-xs tabular-nums">{items} na tela</span>
+      )}
+    </span>
+  );
+}
+
 function Status({
   items,
-  total,
   pending,
   exhausted,
   failed,
@@ -374,7 +400,6 @@ function Status({
   lastRun,
 }: {
   items: number;
-  total: number | null;
   pending: boolean;
   exhausted: Exhaustion | null;
   failed: string[];
@@ -392,13 +417,6 @@ function Status({
   return (
     <div className="flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
       {pending && items === 0 && <span>Consultando os portais…</span>}
-
-      {items > 0 && (
-        <span>
-          {items} {items === 1 ? "vaga" : "vagas"} na tela
-          {total !== null && ` — ${total} passam no seu filtro`}
-        </span>
-      )}
 
       {/* As duas mensagens são diferentes de propósito: uma pede para afrouxar
           o filtro, a outra diz que você está em dia. */}
