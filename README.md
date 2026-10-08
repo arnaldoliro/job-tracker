@@ -199,6 +199,15 @@ nunca abre a página da vaga. Como o alerta não diz se a vaga ainda aceita
 candidatura, a descoberta esconde vagas de alerta mais velhas que um limite
 que você escolhe nos filtros (14 dias por padrão).
 
+**A Gupy é lida pela página, e é a única.** A preferência do projeto é
+alerta por email e API pública antes de ler página web, porque página muda de
+formato sem aviso. A API que a Gupy usava passou a responder 404 em outubro de
+2026, sem substituta pública, e o portal agora entrega as vagas já embutidas
+na página de busca. Ler essa página foi aceito porque o `robots.txt` do portal
+não proíbe nada, e o volume é o de uma pessoa navegando: poucas páginas por
+busca, com pausa entre elas e cache de 15 minutos. Se o formato da página
+mudar, a Gupy aparece como fonte que falhou, em vez de mostrar zero vagas.
+
 **O modelo sugere, você decide.** "Seguimos com outros candidatos" e
 "gostaríamos de seguir com você" são quase a mesma frase com sentidos
 opostos. A leitura do email vira uma sugestão no card, com o motivo ao lado,
