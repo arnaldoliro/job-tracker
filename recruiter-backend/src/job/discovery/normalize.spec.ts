@@ -1,4 +1,10 @@
-import { countryFromText } from './normalize';
+import { STACK_LABELS } from '@recruit/shared';
+import {
+  contractTypeFromLabel,
+  countryFromText,
+  STACK_VOCABULARY,
+  stackFromText,
+} from './normalize';
 
 /**
  * Localização brasileira.
@@ -60,5 +66,88 @@ describe('countryFromText', () => {
     expect(countryFromText('Kraków')).toBeNull();
     expect(countryFromText('')).toBeNull();
     expect(countryFromText(null)).toBeNull();
+  });
+});
+
+/**
+ * Tecnologias detectadas na descrição.
+ *
+ * Os casos de front-end e CMS entraram juntos, e os negativos importam tanto
+ * quanto os positivos: um rótulo que aparece em toda vaga dos EUA por causa do
+ * parágrafo padrão de RH empurraria para o topo vagas que não pedem nada disso.
+ */
+describe('stackFromText', () => {
+  it.each([
+    ['Experiência com Nuxt 3 e Vue 3', ['Vue', 'Nuxt']],
+    ['Stack: NuxtJS, Pinia', ['Nuxt']],
+    ['Site institucional em Gatsby', ['Gatsby']],
+    ['Estilização com Tailwind CSS', ['Tailwind']],
+    ['SCSS e BEM', ['Sass']],
+    ['Manter o Design System no Storybook', ['Design System']],
+    ['Conhecimento de WCAG 2.1', ['Acessibilidade']],
+    ['Experience with web accessibility', ['Acessibilidade']],
+    ['Acessibilidade digital e semântica', ['Acessibilidade']],
+    ['Dashboards com Highcharts', ['Visualização de dados']],
+    ['Charts with D3.js', ['Visualização de dados']],
+    ['Desenvolvedor Drupal 10', ['Drupal']],
+    ['Temas WordPress e WooCommerce', ['WordPress']],
+  ])('reconhece em "%s"', (text, expected) => {
+    // Contém, e não igual: "D3.js" também marca JavaScript, pela regra de
+    // `.js` que já existia, e isso não é o que este teste verifica.
+    expect(stackFromText(text)).toEqual(expect.arrayContaining(expected));
+  });
+
+  it.each([
+    [
+      'We provide reasonable accessibility accommodations during the interview process.',
+    ],
+    [
+      'Vaga afirmativa para pessoas com deficiência, com acessibilidade no escritório.',
+    ],
+    ['Classic novels like The Great Gatsbyesque prose'],
+    ['Our product design team'],
+  ])('não marca nada em "%s"', (text) => {
+    expect(stackFromText(text)).toEqual([]);
+  });
+
+  it('não confunde Nuxt com Next.js', () => {
+    expect(stackFromText('Next.js')).not.toContain('Nuxt');
+    expect(stackFromText('Nuxt.js')).not.toContain('Next.js');
+  });
+});
+
+/**
+ * As opções do filtro e o detector precisam ser o mesmo conjunto. Um rótulo
+ * que o filtro oferece e o detector não acha é um controle que não faz nada;
+ * um que o detector acha e o filtro não oferece aparece na vaga sem poder ser
+ * priorizado.
+ */
+describe('STACK_VOCABULARY', () => {
+  it('cobre exatamente os rótulos oferecidos no filtro', () => {
+    const detected = [...new Set(STACK_VOCABULARY.map(([, label]) => label))];
+
+    expect([...detected].sort()).toEqual([...STACK_LABELS].sort());
+  });
+});
+
+/**
+ * Os valores de `type` abaixo são os que a Gupy usa de verdade, medidos no
+ * portal em outubro de 2026.
+ */
+describe('contractTypeFromLabel', () => {
+  it.each([
+    ['vacancy_type_effective', 'clt'],
+    ['vacancy_legal_entity', 'pj'],
+    ['vacancy_type_autonomous', 'pj'],
+    ['vacancy_type_internship', 'estagio'],
+    ['vacancy_type_temporary', 'temporario'],
+    ['Legal Entity', 'pj'],
+  ])('%s vira %s', (label, expected) => {
+    expect(contractTypeFromLabel(label)).toBe(expected);
+  });
+
+  it('não chuta terceirizado nem banco de talentos', () => {
+    expect(contractTypeFromLabel('vacancy_type_outsource')).toBeNull();
+    expect(contractTypeFromLabel('vacancy_type_talent_pool')).toBeNull();
   });
 });
