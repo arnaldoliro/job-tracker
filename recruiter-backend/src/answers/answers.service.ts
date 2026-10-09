@@ -1,15 +1,6 @@
-import Anthropic, {
-  APIConnectionError,
-  APIConnectionTimeoutError,
-  APIError,
-  AuthenticationError,
-  BadRequestError,
-  RateLimitError,
-} from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import {
   BadRequestException,
-  GatewayTimeoutException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -17,10 +8,11 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { resumeSchema } from '@recruit/shared';
 import type { AnswerDraft, AnswerLanguage, AnswerMode } from '@recruit/shared';
-import type { Env } from '../config/env';
+import { AiUnavailableError, classifyAnthropicError } from '../ai/ai-errors';
+import { toHttpException } from '../ai/ai-http';
+import { AiService } from '../ai/ai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ANSWER_SYSTEM,
@@ -30,6 +22,7 @@ import {
   modelAnswerSchema,
   renderResume,
   type JobContext,
+  type ModelAnswer,
 } from './answer-plan';
 
 /**
@@ -46,6 +39,17 @@ const MODEL = 'claude-sonnet-5-5';
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
 
+/** Quanto da janela do modelo local fica para a resposta. */
+const LOCAL_OUTPUT_RESERVE = 2_048;
+
+/** Menos que isto de vaga e o modelo responde sem saber para o que é. */
+const MIN_JOB_CHARS = 2_000;
+
+const LOCAL_TOOL = {
+  name: 'responder_pergunta',
+  description: 'Registra a resposta para a pergunta do formulário.',
+};
+
 export interface DraftRequest {
   profileId: string;
   jobId?: string;
@@ -60,31 +64,18 @@ export interface DraftRequest {
 @Injectable()
 export class AnswersService {
   private readonly logger = new Logger(AnswersService.name);
-  private readonly client: Anthropic | null;
   private calls: number[] = [];
 
   constructor(
     private readonly prisma: PrismaService,
-    config: ConfigService<Env, true>,
-  ) {
-    const apiKey = config.get('ANTHROPIC_API_KEY', { infer: true });
-
-    this.client = apiKey
-      ? new Anthropic({
-          apiKey,
-          // Tem uma tela esperando. Mais que isto é requisição pendurada.
-          timeout: 90_000,
-          maxRetries: 1,
-        })
-      : null;
-  }
+    private readonly ai: AiService,
+  ) {}
 
   async draft(input: DraftRequest): Promise<AnswerDraft> {
-    if (!this.client) {
+    if (!this.ai.isConfigured('answers')) {
       throw new ServiceUnavailableException({
         error: 'Service Unavailable',
-        message:
-          'Respostas por IA indisponíveis: defina ANTHROPIC_API_KEY no .env do backend.',
+        message: this.ai.unavailableMessage('answers'),
       });
     }
 
@@ -97,12 +88,56 @@ export class AnswersService {
 
     const notes = input.notes?.trim() || null;
     const maxChars = input.maxChars ?? null;
+
+    const { output, jobText } =
+      this.ai.provider('answers') === 'local'
+        ? await this.askLocal(resumeText, job, input, notes, maxChars)
+        : await this.askAnthropic(resumeText, job, input, notes, maxChars);
+
+    return finalize(output, {
+      mode: input.mode,
+      maxChars,
+      resumeText,
+      notes,
+      question: input.question,
+      jobText,
+    });
+  }
+
+  /**
+   * A chamada na Anthropic.
+   *
+   * O currículo vai no `system`, depois das regras, com o marcador de cache:
+   * regras e currículo não mudam entre perguntas, então a segunda pergunta
+   * paga só a vaga e a pergunta. Tudo que varia vai na mensagem do usuário,
+   * depois do prefixo.
+   *
+   * Saída estruturada validada por Zod — o modelo não devolve texto solto que
+   * o código precise interpretar (seção 4). `fallbacks: "default"` refaz a
+   * chamada em outro modelo se a primeira for recusada por engano.
+   *
+   * Fica fora do `AiService.complete` de propósito: saída estruturada em beta,
+   * `fallbacks`, `effort` e cache de prompt são recursos só da Anthropic.
+   */
+  private async askAnthropic(
+    resumeText: string,
+    job: JobContext,
+    input: DraftRequest,
+    notes: string | null,
+    maxChars: number | null,
+  ): Promise<{ output: ModelAnswer; jobText: string }> {
     let message: Awaited<ReturnType<typeof this.ask>>;
 
     try {
       message = await this.ask(resumeText, job, input, notes, maxChars);
     } catch (error) {
-      this.failFromAnthropic(error);
+      // A mensagem crua da API fica só no log, sem o corpo da requisição —
+      // ele carrega o seu currículo.
+      const failure = classifyAnthropicError(error);
+
+      this.logger.error(`Falha ao chamar a Anthropic: ${failure.detail}`);
+
+      throw toHttpException(failure, 'answers');
     }
 
     // Recusa não é erro de rede: a API respondeu que não vai responder. Os
@@ -115,8 +150,7 @@ export class AnswersService {
       });
     }
 
-    const output = message.parsed_output;
-    const parsed = modelAnswerSchema.safeParse(output);
+    const parsed = modelAnswerSchema.safeParse(message.parsed_output);
 
     if (!parsed.success) {
       this.logger.warn(
@@ -134,28 +168,9 @@ export class AnswersService {
       `Rascunho (${input.mode}) para o perfil ${input.profileId}: ${message.usage.input_tokens} entrada, ${message.usage.cache_read_input_tokens ?? 0} do cache, ${message.usage.output_tokens} saída`,
     );
 
-    return finalize(parsed.data, {
-      mode: input.mode,
-      maxChars,
-      resumeText,
-      notes,
-      question: input.question,
-      jobText: job.text,
-    });
+    return { output: parsed.data, jobText: job.text };
   }
 
-  /**
-   * A chamada.
-   *
-   * O currículo vai no `system`, depois das regras, com o marcador de cache:
-   * regras e currículo não mudam entre perguntas, então a segunda pergunta
-   * paga só a vaga e a pergunta. Tudo que varia vai na mensagem do usuário,
-   * depois do prefixo.
-   *
-   * Saída estruturada validada por Zod — o modelo não devolve texto solto que
-   * o código precise interpretar (seção 4). `fallbacks: "default"` refaz a
-   * chamada em outro modelo se a primeira for recusada por engano.
-   */
   private ask(
     resumeText: string,
     job: JobContext,
@@ -163,38 +178,105 @@ export class AnswersService {
     notes: string | null,
     maxChars: number | null,
   ) {
-    return this.client!.beta.messages.parse({
-      model: MODEL,
-      max_tokens: 8_000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: {
-        // Escrita curta sobre fatos dados: `medium` basta, e é mais rápido.
-        effort: 'medium',
-        format: betaZodOutputFormat(modelAnswerSchema),
+    return this.ai.anthropic!.beta.messages.parse(
+      {
+        model: MODEL,
+        max_tokens: 8_000,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        output_config: {
+          // Escrita curta sobre fatos dados: `medium` basta, e é mais rápido.
+          effort: 'medium',
+          format: betaZodOutputFormat(modelAnswerSchema),
+        },
+        system: [
+          { type: 'text', text: ANSWER_SYSTEM },
+          {
+            type: 'text',
+            text: `<curriculo>\n${resumeText}\n</curriculo>`,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: answerPrompt({
+              job,
+              question: input.question,
+              notes,
+              maxChars,
+              language: input.language,
+              mode: input.mode,
+            }),
+          },
+        ],
       },
-      system: [
-        { type: 'text', text: ANSWER_SYSTEM },
-        {
-          type: 'text',
-          text: `<curriculo>\n${resumeText}\n</curriculo>`,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: answerPrompt({
-            job,
-            question: input.question,
-            notes,
-            maxChars,
-            language: input.language,
-            mode: input.mode,
-          }),
-        },
-      ],
-    });
+      // Tem uma tela esperando. Mais que isto é requisição pendurada.
+      { timeout: 90_000, maxRetries: 1 },
+    );
+  }
+
+  /**
+   * A chamada no modelo local.
+   *
+   * Mesmas regras, mesmo currículo no `system`, mesmo schema — pelo
+   * `AiService.complete`, que manda o schema em `format` e os campos no
+   * prompt. Sem cache de prompt (o `keep_alive` do Ollama faz as vezes) e sem
+   * recusa: o modelo local não tem esse sinal.
+   *
+   * O que muda é a janela: currículo, regras e pergunta já ocupam parte dela,
+   * e a vaga é cortada para caber no que sobra — pelo fim, onde ficam os
+   * benefícios, e não pelo começo, onde está o cargo.
+   */
+  private async askLocal(
+    resumeText: string,
+    job: JobContext,
+    input: DraftRequest,
+    notes: string | null,
+    maxChars: number | null,
+  ): Promise<{ output: ModelAnswer; jobText: string }> {
+    const budget = this.ai.textBudget('answers', LOCAL_OUTPUT_RESERVE) ?? 0;
+    const taken =
+      ANSWER_SYSTEM.length +
+      resumeText.length +
+      input.question.length +
+      (notes?.length ?? 0);
+    const jobText = job.text.slice(0, Math.max(MIN_JOB_CHARS, budget - taken));
+
+    let output: ModelAnswer | null;
+
+    try {
+      output = await this.ai.complete('answers', {
+        system: `${ANSWER_SYSTEM}\n\n<curriculo>\n${resumeText}\n</curriculo>`,
+        user: answerPrompt({
+          job: { ...job, text: jobText },
+          question: input.question,
+          notes,
+          maxChars,
+          language: input.language,
+          mode: input.mode,
+        }),
+        schema: modelAnswerSchema,
+        tool: LOCAL_TOOL,
+        maxTokens: 8_000,
+        timeoutMs: 90_000,
+      });
+    } catch (error) {
+      if (error instanceof AiUnavailableError) {
+        throw toHttpException(error, 'answers');
+      }
+
+      throw error;
+    }
+
+    if (output === null) {
+      throw new ServiceUnavailableException({
+        error: 'Service Unavailable',
+        message: 'A IA devolveu uma resposta incompleta. Tente de novo.',
+      });
+    }
+
+    return { output, jobText };
   }
 
   /** O currículo do perfil, já validado e renderizado, ou 400 se vazio. */
@@ -280,67 +362,5 @@ export class AnswersService {
     }
 
     this.calls.push(now);
-  }
-
-  /**
-   * Erro do SDK vira mensagem que diz o que fazer. A mensagem crua da API
-   * fica só no log, sem o corpo da requisição — ele carrega o seu currículo.
-   */
-  private failFromAnthropic(error: unknown): never {
-    const status = error instanceof APIError ? String(error.status) : '-';
-
-    this.logger.error(
-      `Falha ao chamar a Anthropic [${status}]: ${error instanceof Error ? error.message.slice(0, 200) : 'erro'}`,
-    );
-
-    // Timeout antes de conexão: um é subclasse do outro.
-    if (error instanceof APIConnectionTimeoutError) {
-      throw new GatewayTimeoutException({
-        error: 'Gateway Timeout',
-        message: 'A IA demorou demais para responder. Tente de novo.',
-      });
-    }
-
-    if (error instanceof APIConnectionError) {
-      throw new ServiceUnavailableException({
-        error: 'Service Unavailable',
-        message:
-          'Não consegui falar com a API da Anthropic. Verifique a conexão.',
-      });
-    }
-
-    if (error instanceof AuthenticationError) {
-      throw new ServiceUnavailableException({
-        error: 'Service Unavailable',
-        message:
-          'A API recusou a chave. Confira ANTHROPIC_API_KEY no .env do backend.',
-      });
-    }
-
-    if (error instanceof RateLimitError) {
-      throw new HttpException(
-        {
-          error: 'Too Many Requests',
-          message: 'A Anthropic está limitando as chamadas. Espere um pouco.',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    if (
-      error instanceof BadRequestError &&
-      /credit balance/i.test(error.message)
-    ) {
-      throw new ServiceUnavailableException({
-        error: 'Service Unavailable',
-        message:
-          'Sem crédito na conta da Anthropic. Adicione créditos em console.anthropic.com.',
-      });
-    }
-
-    throw new ServiceUnavailableException({
-      error: 'Service Unavailable',
-      message: 'Não consegui gerar a resposta agora. Tente de novo.',
-    });
   }
 }
