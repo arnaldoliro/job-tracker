@@ -3,12 +3,14 @@
 import { useState, useTransition } from "react";
 import { RESOLVE_BATCH } from "@recruit/shared";
 import type {
+  AiStatus,
   Application,
   EmailMessage,
   EmailResolution,
   EmailStatus,
 } from "@recruit/shared";
 import { IconMail } from "@/components/icons";
+import { AiBadge } from "@/features/ai";
 import {
   resolveEmailsAction,
   syncEmailsAction,
@@ -34,6 +36,8 @@ interface UnlinkedInboxProps {
   emails: EmailMessage[];
   applications: Application[];
   status: EmailStatus;
+  /** Quem vai ler os emails no "Resolver por IA". `null` = não deu para saber. */
+  ai: AiStatus | null;
 }
 
 export function UnlinkedInbox({
@@ -41,6 +45,7 @@ export function UnlinkedInbox({
   emails,
   applications,
   status,
+  ai,
 }: UnlinkedInboxProps) {
   const [sync, setSync] = useState<SyncState>({ status: "idle" });
   const [syncing, startSync] = useTransition();
@@ -203,15 +208,18 @@ export function UnlinkedInbox({
                 : `${present.length} ${present.length === 1 ? "selecionado" : "selecionados"}`}
             </span>
 
-            <button
-              type="button"
-              onClick={resolve}
-              disabled={resolving || present.length === 0 || tooMany}
-              className="ml-auto flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-            >
-              <SparkIcon />
-              {resolving ? "A IA está lendo…" : "Resolver por IA"}
-            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-3">
+              <AiBadge status={ai} task="resolve" />
+              <button
+                type="button"
+                onClick={resolve}
+                disabled={resolving || present.length === 0 || tooMany}
+                className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+              >
+                <SparkIcon />
+                {resolving ? "A IA está lendo…" : "Resolver por IA"}
+              </button>
+            </div>
 
             <p className="w-full text-xs leading-relaxed text-zinc-500">
               {tooMany
