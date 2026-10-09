@@ -1,3 +1,4 @@
+import { getAiStatus } from "@/features/ai/api";
 import { listSavedJobs } from "@/features/jobs";
 import { JobDiscovery } from "@/features/jobs/components/job-discovery";
 import { getProfileDetail } from "@/features/profile/api";
@@ -27,9 +28,10 @@ export default async function BuscarVagasPage({
     return null;
   }
 
-  const [profile, saved] = await Promise.all([
+  const [profile, saved, ai] = await Promise.all([
     getProfileDetail(selected.id),
     listSavedJobs(selected.id),
+    getAiStatus(),
   ]);
 
   return (
@@ -37,6 +39,7 @@ export default async function BuscarVagasPage({
       profileId={selected.id}
       query={params.q ?? ""}
       preferences={profile.preferences}
+      ai={ai}
       savedUrls={saved
         .map((item) => item.job.url)
         .filter((url) => url !== null)}

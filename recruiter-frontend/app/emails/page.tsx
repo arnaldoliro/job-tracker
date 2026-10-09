@@ -1,3 +1,4 @@
+import { getAiStatus } from "@/features/ai/api";
 import { listApplications } from "@/features/applications";
 import { getEmailStatus, listUnlinkedEmails, UnlinkedInbox } from "@/features/emails";
 import { getSelectedProfile } from "@/features/profile/current-profile";
@@ -16,10 +17,11 @@ export default async function EmailsPage() {
     return null;
   }
 
-  const [emails, applications, status] = await Promise.all([
+  const [emails, applications, status, ai] = await Promise.all([
     listUnlinkedEmails(),
     listApplications(profile.id),
     getEmailStatus(),
+    getAiStatus(),
   ]);
 
   return (
@@ -28,6 +30,7 @@ export default async function EmailsPage() {
       emails={emails}
       applications={applications}
       status={status}
+      ai={ai}
     />
   );
 }

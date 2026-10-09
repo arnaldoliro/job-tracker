@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { AnswerDraft, AnswerLanguage, AnswerMode } from "@recruit/shared";
+import type {
+  AiStatus,
+  AnswerDraft,
+  AnswerLanguage,
+  AnswerMode,
+} from "@recruit/shared";
+import { AiBadge } from "@/features/ai";
 import { draftAnswerAction } from "@/features/answers/actions";
 
 const MODES: { key: AnswerMode; label: string; hint: string }[] = [
@@ -38,10 +44,14 @@ const LANGUAGES: { key: AnswerLanguage; label: string }[] = [
 export function AnswerPanel({
   profileId,
   jobId,
+  ai,
 }: {
   profileId: string;
   jobId: string;
+  /** Quem vai escrever: Claude ou o modelo local. `null` = não deu para saber. */
+  ai: AiStatus | null;
 }) {
+  const local = ai?.tasks.answers.provider === "local";
   const [mode, setMode] = useState<AnswerMode>("topics");
   const [language, setLanguage] = useState<AnswerLanguage>("pt");
   const [question, setQuestion] = useState("");
@@ -90,11 +100,22 @@ export function AnswerPanel({
       className="cine-glass flex scroll-mt-24 flex-col gap-5 rounded-2xl p-6"
     >
       <header className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">Perguntas do formulário</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Perguntas do formulário</h2>
+          <AiBadge status={ai} task="answers" />
+        </div>
         <p className="text-sm text-zinc-400">
           Cole a pergunta da candidatura. A IA usa o seu currículo e esta vaga,
           e só afirma o que o currículo ou as suas anotações sustentam.
         </p>
+        {local && (
+          // Escrita é onde um modelo pequeno mais erra: a conferência do
+          // servidor (trechos, números, vícios) continua, mas vale ler duas vezes.
+          <p className="text-xs text-amber-200/80">
+            Modelo local: a escrita costuma sair mais fraca que a do Claude.
+            Revise com mais atenção, principalmente os fatos citados.
+          </p>
+        )}
       </header>
 
       <div className="flex flex-col gap-3">

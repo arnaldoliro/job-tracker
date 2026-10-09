@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getAiStatus } from "@/features/ai/api";
 import { AnswerPanel } from "@/features/answers";
 import { ApiError } from "@/features/jobs/api";
 import { JobDetail, getJob } from "@/features/jobs";
@@ -26,7 +27,7 @@ export default async function VagaPage({
     throw error;
   }
 
-  const profile = await getSelectedProfile();
+  const [profile, ai] = await Promise.all([getSelectedProfile(), getAiStatus()]);
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -35,7 +36,7 @@ export default async function VagaPage({
           gate do layout já mostra o seletor por cima. */}
       {profile && (
         <div className="mx-auto w-full max-w-3xl">
-          <AnswerPanel profileId={profile.id} jobId={job.id} />
+          <AnswerPanel profileId={profile.id} jobId={job.id} ai={ai} />
         </div>
       )}
     </div>

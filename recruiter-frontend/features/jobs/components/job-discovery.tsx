@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Exhaustion, JobPreferences } from "@recruit/shared";
 import { discoverAction } from "@/features/jobs/actions";
+import type { AiStatus } from "@recruit/shared";
 import { ExtractCard } from "@/features/jobs/components/extract-card";
 import {
   FiltersModal,
@@ -28,6 +29,8 @@ import { saveProfileAction } from "@/features/profile/actions";
 
 interface JobDiscoveryProps {
   profileId: string;
+  /** Quem lê a página na extração por link. `null` = não deu para saber. */
+  ai: AiStatus | null;
   query: string;
   preferences: JobPreferences;
   savedUrls: string[];
@@ -45,6 +48,7 @@ interface RunStats {
 
 export function JobDiscovery({
   profileId,
+  ai,
   query,
   preferences,
   savedUrls,
@@ -330,7 +334,7 @@ export function JobDiscovery({
       </section>
 
       <div className="max-w-4xl">
-        <ExtractCard profileId={profileId} />
+        <ExtractCard profileId={profileId} ai={ai} />
       </div>
 
       {items.length > 0 && (

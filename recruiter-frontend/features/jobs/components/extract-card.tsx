@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
+import type { AiStatus } from "@recruit/shared";
 import { IconUpload } from "@/components/icons";
+import { AiBadge } from "@/features/ai";
 import { extractJobAction, type ExtractState } from "@/features/jobs/actions";
 import {
   ResultCard,
@@ -9,7 +11,7 @@ import {
 } from "@/features/jobs/components/result-card";
 
 /**
- * Cola o link, o Claude preenche. O resultado aparece como um card idêntico ao
+ * Cola o link, a IA preenche. O resultado aparece como um card idêntico ao
  * da descoberta — é o mesmo formato, então segue pelo mesmo caminho de salvar e
  * preserva stack, salário e requisitos, que o formulário de candidatura não
  * carregaria.
@@ -20,7 +22,13 @@ import {
 
 const idle: ExtractState = { status: "idle" };
 
-export function ExtractCard({ profileId }: { profileId: string }) {
+export function ExtractCard({
+  profileId,
+  ai,
+}: {
+  profileId: string;
+  ai: AiStatus | null;
+}) {
   const [state, formAction, pending] = useActionState(extractJobAction, idle);
 
   return (
@@ -33,10 +41,13 @@ export function ExtractCard({ profileId }: { profileId: string }) {
       </summary>
 
       <div className="flex flex-col gap-3 px-4 pb-4">
-        <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-          Cole o endereço da vaga e o Claude preenche empresa, cargo, stack,
-          salário e requisitos. Nada é gravado até você salvar.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+            Cole o endereço da vaga e a IA preenche empresa, cargo, stack,
+            salário e requisitos. Nada é gravado até você salvar.
+          </p>
+          <AiBadge status={ai} task="extraction" />
+        </div>
 
         <form action={formAction} className="flex flex-wrap gap-2">
           <input
