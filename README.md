@@ -22,7 +22,7 @@ sugere o novo status. Você confirma com um clique.
 
 ## O que ele faz
 
-| Funcionalidade | Precisa de chave da Anthropic? |
+| Funcionalidade | Precisa de IA? |
 | --- | --- |
 | Candidaturas: cadastro, status, histórico, busca, filtros e ordenação | não |
 | Descoberta de vagas em Gupy, Greenhouse, Lever, Ashby, agregadores remotos, portais brasileiros e alertas do LinkedIn | não |
@@ -35,16 +35,19 @@ sugere o novo status. Você confirma com um clique.
 | Extração de vaga a partir de um link | sim |
 | Respostas para perguntas abertas de formulário, a partir do seu currículo | sim |
 
-Sem a chave, tudo da primeira metade funciona. Com ela, o Claude entra só onde
-você pede, e o que ele propõe passa pelo seu clique antes de virar dado.
+Sem IA, tudo da primeira metade funciona. "IA" aqui é uma chave da API da
+Anthropic (o Claude) **ou um modelo rodando na sua máquina pelo Ollama**, à sua
+escolha por tarefa. Nos dois casos ela entra só onde você pede, e o que ela
+propõe passa pelo seu clique antes de virar dado.
 
 ## Requisitos
 
 - **Node.js 20.9 ou mais novo** e npm
 - **Docker**, para o Postgres
 - **Google Chrome**, só se for usar o preenchimento de formulário
-- Opcional: uma **chave da API da Anthropic** com crédito, e uma **conta do
-  Gmail** para a leitura de emails
+- Opcional: uma **chave da API da Anthropic** com crédito ou o **Ollama** com
+  um modelo baixado, para as partes de IA; e uma **conta do Gmail** para a
+  leitura de emails
 
 ## Começando
 
@@ -125,6 +128,94 @@ O que sai da sua máquina:
 Texto escrito pelo Claude carrega a marca d'água estatística que a Anthropic
 aplica desde agosto de 2026. Por isso as respostas de formulário vêm, por
 padrão, como tópicos para você escrever.
+
+### Modelo local (Ollama)
+
+Em vez da API da Anthropic, qualquer tarefa de IA pode rodar num modelo na
+sua própria máquina. Aí nada sai dela: emails, vagas e currículo ficam onde
+estão. Não precisa de chave nem de crédito.
+
+1. Suba o Ollama. O jeito recomendado é pelo Docker, que já está no projeto:
+
+   ```bash
+   docker compose --profile ai up -d ollama
+   docker compose --profile ai exec ollama ollama pull qwen2.5:3b
+   ```
+
+   O serviço fica no perfil `ai`, então o `docker compose up` de sempre
+   continua subindo só o Postgres. Para usar a placa de vídeo, o Docker
+   precisa do [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html),
+   instalado uma vez:
+
+   ```bash
+   # depois de instalar o pacote nvidia-container-toolkit pelo guia acima
+   sudo nvidia-ctk runtime configure --runtime=docker
+   sudo systemctl restart docker
+   docker run --rm --gpus all ubuntu nvidia-smi   # tem que listar a sua placa
+   ```
+
+   Sem placa NVIDIA, apague o bloco `deploy:` do serviço `ollama` no
+   `docker-compose.yml`: o modelo roda no processador, mais devagar.
+
+   Também dá para instalar o [Ollama](https://ollama.com) direto na máquina
+   (`ollama pull qwen2.5:3b` depois). O container isola melhor: o Ollama não
+   enxerga nenhuma pasta sua, roda sem privilégios e não instala serviço no
+   sistema.
+
+2. Confira que ele escuta só nesta máquina: `ss -ltn | grep 11434` tem que
+   mostrar `127.0.0.1:11434`.
+3. Escolha, no `.env`, quais tarefas vão para ele:
+
+   ```env
+   AI_EMAIL_PROVIDER=local        # sugestão de status pelo email
+   AI_RESOLVE_PROVIDER=local      # "Resolver por IA"
+   AI_EXTRACTION_PROVIDER=local   # extração de vaga por link
+   AI_ANSWERS_PROVIDER=anthropic  # respostas de formulário
+   AI_LOCAL_MODEL=qwen2.5:3b
+   ```
+
+   O padrão de todas é `anthropic`. Dá para misturar: leitura de emails no
+   modelo local e escrita no Claude. A tela mostra, ao lado de cada ação de IA,
+   quem vai atendê-la.
+
+**Qual tarefa onde.** Ler email, montar o plano do "Resolver por IA" e
+extrair vaga são leitura com resposta fechada, e um modelo de 3 a 4 bilhões
+de parâmetros dá conta. As respostas de formulário são escrita, e um modelo
+desse tamanho escreve bem pior que o Sonnet; a tela avisa e a conferência de
+fatos continua, mas vale manter essa tarefa na Anthropic.
+
+**Hardware.** Modelos de 3–4B (`qwen2.5:3b`, `llama3.2:3b`) cabem numa placa de
+vídeo de 4 GB e respondem em segundos. Modelos de 7–8B precisam de mais
+memória de vídeo; sem ela rodam no processador, várias vezes mais devagar.
+`AI_LOCAL_TIMEOUT_MS` é o tempo máximo por chamada (2 minutos por padrão).
+
+**Janela de contexto.** `AI_LOCAL_NUM_CTX` (8192 por padrão) é quanto texto o
+modelo enxerga de uma vez. Acima disso o Ollama corta o prompt em silêncio,
+então o app limita o texto que manda por essa conta: emails cabem folgados;
+páginas de vaga longas e respostas de formulário ficam melhores com 16384,
+se a memória permitir.
+
+**Segurança.** `AI_LOCAL_URL` precisa apontar para esta máquina (127.0.0.1,
+localhost ou ::1); outro endereço é recusado ao subir. O motivo de existir
+um modelo local é não mandar dados para fora, e um Ollama na rede faria
+justamente isso. O modelo local recebe os mesmos textos delimitados como dado
+que o Claude recebe, e a resposta dele passa pela mesma validação: o formato
+é garantido pelo Ollama, a verdade é conferida pelo app. Texto escrito por
+um modelo local não carrega a marca d'água da Anthropic.
+
+No container, o Ollama só alcança o volume `ollama-data`, onde ficam os
+modelos. Ele não grava o que você manda: o log registra a requisição, não o
+conteúdo. A única coisa que ele baixa da internet é o modelo, quando você roda
+`ollama pull`. A imagem tem versão e digest fixos no `docker-compose.yml`, e
+para atualizar você troca os dois. Vale fazer isso de vez em quando, porque
+versões antigas do Ollama já tiveram falha grave na API.
+
+**Qualidade.** Um modelo pequeno acerta menos que o Claude, e pode devolver
+um JSON válido com conteúdo errado — sugerir status num recibo, por exemplo.
+As barreiras que já existem valem para ele: a empresa precisa aparecer no
+email, os trechos citados precisam existir no currículo, e nada muda sem o
+seu clique. Se as sugestões vierem ruins, suba para um modelo maior ou volte
+a tarefa para a Anthropic.
 
 ### Email (Gmail)
 
@@ -329,3 +420,26 @@ rótulo.
 
 **A IA responde "sem crédito".** A chave existe, mas a conta da Anthropic está
 sem saldo. Adicione créditos em `console.anthropic.com`.
+
+**"Ollama não está rodando em http://127.0.0.1:11434".** Suba o Ollama
+com `docker compose --profile ai up -d ollama` (ou `ollama serve`, se ele
+estiver instalado na máquina). O selo ao lado da ação de IA fica âmbar enquanto
+ele não responde. Se o container não sobe com "could not select device driver",
+falta o NVIDIA Container Toolkit (ver "Modelo local").
+
+**"Modelo … não baixado no Ollama".** O nome em `AI_LOCAL_MODEL` não está na
+lista do Ollama. Rode
+`docker compose --profile ai exec ollama ollama pull <nome>` com o mesmo nome
+(ou `ollama pull <nome>`, com ele instalado na máquina).
+
+**O backend não sobe e cita `AI_LOCAL_MODEL`.** Alguma tarefa está em `local`
+sem modelo configurado. Preencha `AI_LOCAL_MODEL` ou volte a tarefa para
+`anthropic`.
+
+**O modelo local responde "incompleto" ou corta a vaga.** O texto passou da
+janela de contexto. Aumente `AI_LOCAL_NUM_CTX` (16384 costuma bastar) ou use
+um texto menor. O log do backend avisa quando o prompt encosta no limite.
+
+**O modelo local demora demais.** Um modelo maior que a memória da placa de
+vídeo roda no processador. Troque por um de 3–4B ou aumente
+`AI_LOCAL_TIMEOUT_MS`.
