@@ -1,8 +1,6 @@
-import Anthropic, { APIError } from '@anthropic-ai/sdk';
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import type { Env } from '../config/env';
+import { AiService } from '../ai/ai.service';
 import { prompt, type EmailToClassify } from './email-prompt';
 
 /**
@@ -12,13 +10,16 @@ import { prompt, type EmailToClassify } from './email-prompt';
  * de um recibo dá para reconhecer por texto, o sentido de "infelizmente" ou
  * "próxima etapa" não.
  *
- * Haiku, como a extração de vaga (seção 4): é leitura com resposta fechada,
- * não escrita. A saída é um enum validado com Zod — o modelo não tem como
- * devolver nada que o sistema execute.
+ * Leitura com resposta fechada: na Anthropic é o Haiku (seção 4), e um
+ * modelo local pequeno também dá conta — quem decide é o `.env`, via
+ * `AiService`. A saída é um enum validado com Zod em qualquer provedor; o
+ * modelo não tem como devolver nada que o sistema execute.
  */
 
-const MODEL = 'claude-haiku-4-5-20251001';
-const TOOL_NAME = 'classificar_email';
+const TOOL = {
+  name: 'classificar_email',
+  description: 'Registra o status que o email indica.',
+};
 
 /**
  * O que o modelo pode responder. `nenhum` é a resposta certa para a maioria
@@ -44,13 +45,6 @@ export const emailVerdictSchema = z.object({
 
 export type EmailVerdict = z.infer<typeof emailVerdictSchema>;
 
-/**
- * A API não respondeu: sem chave, sem crédito, fora do ar. A rodada para e o
- * email fica pendente para a próxima — diferente de uma resposta fora do
- * schema, que é do email e não se resolve tentando de novo.
- */
-export class ClassifierUnavailableError extends Error {}
-
 const SYSTEM = [
   'Você lê emails de processos seletivos e diz se o email muda o status de uma candidatura a vaga de emprego.',
   '',
@@ -70,76 +64,24 @@ const SYSTEM = [
 
 @Injectable()
 export class EmailClassifierService {
-  private readonly logger = new Logger(EmailClassifierService.name);
-  private readonly client: Anthropic | null;
-
-  constructor(config: ConfigService<Env, true>) {
-    const apiKey = config.get('ANTHROPIC_API_KEY', { infer: true });
-
-    this.client = apiKey
-      ? new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 })
-      : null;
-  }
+  constructor(private readonly ai: AiService) {}
 
   get configured(): boolean {
-    return this.client !== null;
+    return this.ai.isConfigured('email');
   }
 
   /**
    * `null` quando a resposta veio fora do schema. Lança
-   * `ClassifierUnavailableError` quando a API não respondeu.
+   * `AiUnavailableError` quando o provedor não respondeu.
    */
-  async classify(email: EmailToClassify): Promise<EmailVerdict | null> {
-    if (!this.client) {
-      throw new ClassifierUnavailableError('ANTHROPIC_API_KEY não definida');
-    }
-
-    let message: Anthropic.Message;
-
-    try {
-      message = await this.client.messages.create({
-        model: MODEL,
-        max_tokens: 512,
-        system: SYSTEM,
-        tools: [
-          {
-            name: TOOL_NAME,
-            description: 'Registra o status que o email indica.',
-            // Mesmo estreitamento da extração de vaga: um z.object vira JSON
-            // Schema com `type: 'object'`, que é o que o SDK tipa.
-            input_schema: z.toJSONSchema(
-              emailVerdictSchema,
-            ) as Anthropic.Tool.InputSchema,
-          },
-        ],
-        tool_choice: { type: 'tool', name: TOOL_NAME },
-        messages: [{ role: 'user', content: prompt(email) }],
-      });
-    } catch (error) {
-      // Status e mensagem da API, nunca o corpo da requisição: ele carrega o
-      // email inteiro.
-      const status = error instanceof APIError ? String(error.status) : '-';
-
-      throw new ClassifierUnavailableError(
-        `Anthropic [${status}]: ${error instanceof Error ? error.message.slice(0, 200) : 'erro'}`,
-      );
-    }
-
-    const block = message.content.find((item) => item.type === 'tool_use');
-    const parsed = emailVerdictSchema.safeParse(
-      block?.type === 'tool_use' ? block.input : undefined,
-    );
-
-    if (!parsed.success) {
-      this.logger.warn(
-        `Classificação fora do schema: ${parsed.error.issues
-          .map((issue) => issue.path.join('.') || '(raiz)')
-          .join(', ')}`,
-      );
-
-      return null;
-    }
-
-    return parsed.data;
+  classify(email: EmailToClassify): Promise<EmailVerdict | null> {
+    return this.ai.complete('email', {
+      system: SYSTEM,
+      user: prompt(email),
+      schema: emailVerdictSchema,
+      tool: TOOL,
+      maxTokens: 512,
+      timeoutMs: 30_000,
+    });
   }
 }

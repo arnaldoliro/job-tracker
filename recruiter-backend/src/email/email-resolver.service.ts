@@ -1,9 +1,5 @@
-import Anthropic, { APIError } from '@anthropic-ai/sdk';
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { z } from 'zod';
-import type { Env } from '../config/env';
-import { ClassifierUnavailableError } from './email-classifier.service';
+import { Injectable } from '@nestjs/common';
+import { AiService } from '../ai/ai.service';
 import {
   RESOLVE_SYSTEM,
   resolvePrompt,
@@ -22,89 +18,44 @@ import {
  * errada para si mesmo — que ainda passa pela conferência do servidor e pelo
  * seu clique.
  *
- * Haiku, como a extração e a classificação (seção 4): é leitura com resposta
- * fechada. O que volta é validado com Zod e convertido em plano por
- * `toResolution`; este serviço não grava nada.
+ * Leitura com resposta fechada, como a classificação: Haiku na Anthropic
+ * (seção 4) ou o modelo local, conforme o `.env`. O que volta é validado com
+ * Zod e convertido em plano por `toResolution`; este serviço não grava nada.
  */
 
-const MODEL = 'claude-haiku-4-5-20251001';
-const TOOL_NAME = 'decidir_email';
+const TOOL = {
+  name: 'decidir_email',
+  description: 'Registra a decisão sobre o email.',
+};
 
 @Injectable()
 export class EmailResolverService {
-  private readonly logger = new Logger(EmailResolverService.name);
-  private readonly client: Anthropic | null;
-
-  constructor(config: ConfigService<Env, true>) {
-    const apiKey = config.get('ANTHROPIC_API_KEY', { infer: true });
-
-    this.client = apiKey
-      ? new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 })
-      : null;
-  }
+  constructor(private readonly ai: AiService) {}
 
   get configured(): boolean {
-    return this.client !== null;
+    return this.ai.isConfigured('resolve');
+  }
+
+  /** O que falta para funcionar, com o nome da variável do `.env`. */
+  get unavailableMessage(): string {
+    return this.ai.unavailableMessage('resolve');
   }
 
   /**
    * `null` quando a resposta veio fora do schema. Lança
-   * `ClassifierUnavailableError` quando a API não respondeu.
+   * `AiUnavailableError` quando o provedor não respondeu.
    */
-  async decide(
+  decide(
     email: EmailToResolve,
     applications: ListedApplication[],
   ): Promise<ResolveVerdict | null> {
-    if (!this.client) {
-      throw new ClassifierUnavailableError('ANTHROPIC_API_KEY não definida');
-    }
-
-    let message: Anthropic.Message;
-
-    try {
-      message = await this.client.messages.create({
-        model: MODEL,
-        max_tokens: 512,
-        system: RESOLVE_SYSTEM,
-        tools: [
-          {
-            name: TOOL_NAME,
-            description: 'Registra a decisão sobre o email.',
-            input_schema: z.toJSONSchema(
-              resolveVerdictSchema,
-            ) as Anthropic.Tool.InputSchema,
-          },
-        ],
-        tool_choice: { type: 'tool', name: TOOL_NAME },
-        messages: [
-          { role: 'user', content: resolvePrompt(email, applications) },
-        ],
-      });
-    } catch (error) {
-      // Status e mensagem da API, nunca o corpo da requisição: ele carrega o
-      // email inteiro.
-      const status = error instanceof APIError ? String(error.status) : '-';
-
-      throw new ClassifierUnavailableError(
-        `Anthropic [${status}]: ${error instanceof Error ? error.message.slice(0, 200) : 'erro'}`,
-      );
-    }
-
-    const block = message.content.find((item) => item.type === 'tool_use');
-    const parsed = resolveVerdictSchema.safeParse(
-      block?.type === 'tool_use' ? block.input : undefined,
-    );
-
-    if (!parsed.success) {
-      this.logger.warn(
-        `Decisão fora do schema para o email ${email.id}: ${parsed.error.issues
-          .map((issue) => issue.path.join('.') || '(raiz)')
-          .join(', ')}`,
-      );
-
-      return null;
-    }
-
-    return parsed.data;
+    return this.ai.complete('resolve', {
+      system: RESOLVE_SYSTEM,
+      user: resolvePrompt(email, applications),
+      schema: resolveVerdictSchema,
+      tool: TOOL,
+      maxTokens: 512,
+      timeoutMs: 30_000,
+    });
   }
 }

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AiModule } from './ai/ai.module';
 import { AppController } from './app.controller';
 import { AnswersModule } from './answers/answers.module';
 import { AppService } from './app.service';
@@ -20,6 +21,7 @@ import { ProfileModule } from './profile/profile.module';
       validate: validateEnv,
     }),
     PrismaModule,
+    AiModule,
     ProfileModule,
     ApplicationModule,
     JobModule,

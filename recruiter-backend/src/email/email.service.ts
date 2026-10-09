@@ -25,11 +25,10 @@ import { ApplicationService } from '../application/application.service';
 import type { Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { isJobDigestSender, JOB_DIGEST_SENDERS } from './ats';
+import { AiUnavailableError } from '../ai/ai-errors';
+import { toHttpException } from '../ai/ai-http';
 import { classify, companyGuess } from './confirmation';
-import {
-  ClassifierUnavailableError,
-  EmailClassifierService,
-} from './email-classifier.service';
+import { EmailClassifierService } from './email-classifier.service';
 import { EmailResolverService } from './email-resolver.service';
 import { excerpt, gmailUrl } from './email-text';
 import { fetchSince, ImapError, type ImapConfig } from './imap.client';
@@ -661,7 +660,7 @@ export class EmailService {
           const reason: unknown = failure.reason;
 
           this.logger.warn(
-            reason instanceof ClassifierUnavailableError
+            reason instanceof AiUnavailableError
               ? `Classificação interrompida: ${reason.message}`
               : `Classificação interrompida: ${describe(reason)}`,
           );
@@ -838,8 +837,7 @@ export class EmailService {
     if (!this.resolver.configured) {
       throw new ServiceUnavailableException({
         error: 'Service Unavailable',
-        message:
-          'Resolver por IA indisponível: defina ANTHROPIC_API_KEY no .env do backend.',
+        message: this.resolver.unavailableMessage,
       });
     }
 
@@ -913,14 +911,12 @@ export class EmailService {
 
       return ids.map((id) => plan.get(id)!);
     } catch (error) {
-      if (error instanceof ClassifierUnavailableError) {
+      if (error instanceof AiUnavailableError) {
+        // A mensagem diz o que fazer conforme o provedor: crédito e chave na
+        // Anthropic; subir o Ollama ou baixar o modelo no local.
         this.logger.warn(`Resolver por IA interrompido: ${error.message}`);
 
-        throw new ServiceUnavailableException({
-          error: 'Service Unavailable',
-          message:
-            'A IA não respondeu agora. Confira o crédito da conta Anthropic e a conexão, e tente de novo.',
-        });
+        throw toHttpException(error, 'resolve');
       }
 
       throw error;
