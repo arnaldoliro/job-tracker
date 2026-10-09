@@ -22,5 +22,43 @@ services:
       timeout: 5s
       retries: 10
 
+  # Modelo de IA local, alternativa à API da Anthropic (README, "Modelo
+  # local"). Fica no perfil `ai`: `docker compose up` continua subindo só o
+  # Postgres, e este só sobe com `docker compose --profile ai up -d ollama`.
+  ollama:
+    # Versão e digest fixos: a imagem não muda sem uma mudança neste arquivo.
+    # O Ollama já teve falha grave na API — atualize trocando os dois juntos.
+    image: ollama/ollama:0.40.2@sha256:b86366bb528bbf7f1424435d165028497a5b69bf6ddb4fa5a87102e2b79f44fb
+    container_name: job-tracker-ollama
+    profiles: ["ai"]
+    restart: unless-stopped
+    # A API do Ollama não tem autenticação, e o que passa por ela é currículo
+    # e email. SÓ na interface local, pelo mesmo motivo do Postgres acima.
+    # Dentro do container ele escuta em 0.0.0.0; quem limita é esta linha.
+    ports:
+      - "127.0.0.1:11434:11434"
+    environment:
+      # Não grava o histórico do `ollama run` no volume.
+      OLLAMA_NOHISTORY: "1"
+    # Só os modelos. Nenhuma pasta da máquina entra no container.
+    volumes:
+      - ollama-data:/root/.ollama
+    # Root dentro do container, mas sem capability nenhuma e sem como ganhar
+    # privilégio novo: uma falha explorada no Ollama fica presa aqui.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Exige o NVIDIA Container Toolkit (README). Sem ele, o `up` falha com
+    # "could not select device driver".
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   postgres-data:
+  ollama-data:
