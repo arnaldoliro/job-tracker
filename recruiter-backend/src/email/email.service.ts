@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type {
   Application,
+  EmailAction,
   ApplyResolutionsInput,
   ApplyResolutionsResult,
   CreateApplicationFromEmailInput,
@@ -20,6 +21,7 @@ import type {
   StatusSuggestion,
   TimelineEntry,
 } from '@recruit/shared';
+import { actionRequired } from './action-required';
 import { active } from '../application/active';
 import { ApplicationService } from '../application/application.service';
 import type { Env } from '../config/env';
@@ -109,6 +111,55 @@ export class EmailService {
             mailbox: config.get('IMAP_MAILBOX', { infer: true }),
           }
         : null;
+  }
+
+  /** Inclui convites sem vínculo: esperar a associação faria perder a etapa. */
+  async actionItems(
+    profileId: string,
+    now = new Date(),
+  ): Promise<EmailAction[]> {
+    const rows = await this.prisma.emailMessage.findMany({
+      where: {
+        dismissedAt: null,
+        senderVerified: true,
+        receivedAt: { gte: new Date(now.getTime() - 90 * 86_400_000) },
+        OR: [
+          { applicationId: null },
+          {
+            profileId,
+            application: {
+              ...active,
+              status: { notIn: ['rejeitado', 'cancelado'] },
+            },
+          },
+        ],
+      },
+      orderBy: { receivedAt: 'desc' },
+      select: {
+        id: true,
+        subject: true,
+        bodyText: true,
+        fromAddress: true,
+        fromName: true,
+        receivedAt: true,
+        messageId: true,
+      },
+    });
+    return rows.flatMap((row) => {
+      const signal = actionRequired(row);
+      return signal
+        ? [
+            {
+              emailId: row.id,
+              subject: row.subject,
+              sender: row.fromName ?? row.fromAddress,
+              receivedAt: row.receivedAt.toISOString(),
+              ...signal,
+              gmailUrl: gmailUrl(row.messageId, this.config),
+            },
+          ]
+        : [];
+    });
   }
 
   get configured(): boolean {
@@ -798,12 +849,13 @@ export class EmailService {
   /**
    * Tira um email da tela de pendentes.
    *
-   * Só email sem candidatura: o que já está vinculado não aparece nessa tela,
-   * e descartá-lo esconderia um item do histórico de uma candidatura.
+   * Também atende aos avisos de Hoje vinculados a uma candidatura. A linha
+   * do tempo continua consultando todos os emails, inclusive os dispensados:
+   * revisar um aviso nunca apaga o registro do processo.
    */
   async dismiss(id: string): Promise<void> {
     const { count } = await this.prisma.emailMessage.updateMany({
-      where: { id, applicationId: null },
+      where: { id },
       data: { dismissedAt: new Date() },
     });
 
