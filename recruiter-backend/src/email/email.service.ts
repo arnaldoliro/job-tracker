@@ -18,10 +18,13 @@ import type {
   EmailStatusVerdict,
   EmailStatus,
   EmailSyncResult,
+  EmailSyncState,
   StatusSuggestion,
   TimelineEntry,
 } from '@recruit/shared';
+import { EMAIL_STALE_HOURS } from '@recruit/shared';
 import { actionRequired } from './action-required';
+import { byUrgency, resolveDeadline } from './deadline';
 import { active } from '../application/active';
 import { ApplicationService } from '../application/application.service';
 import type { Env } from '../config/env';
@@ -86,6 +89,14 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly config: ImapConfig | null;
   private running = false;
+  /**
+   * Histórico da sincronização, só em memória: é o que a tela Hoje mostra
+   * para não dizer "sem pendências" sobre emails que nunca foram lidos.
+   * Não vale uma tabela: reiniciar a API dispara a sincronização do boot.
+   */
+  private runningSince: Date | null = null;
+  private lastSuccessAt: Date | null = null;
+  private lastAttempt: EmailSyncState['lastAttempt'] = null;
   private classifying = false;
   private resolving = false;
 
@@ -145,21 +156,67 @@ export class EmailService {
         messageId: true,
       },
     });
-    return rows.flatMap((row) => {
-      const signal = actionRequired(row);
-      return signal
-        ? [
-            {
-              emailId: row.id,
-              subject: row.subject,
-              sender: row.fromName ?? row.fromAddress,
-              receivedAt: row.receivedAt.toISOString(),
-              ...signal,
-              gmailUrl: gmailUrl(row.messageId, this.config),
-            },
-          ]
-        : [];
-    });
+    return rows
+      .flatMap((row) => {
+        const signal = actionRequired(row);
+        return signal
+          ? [
+              {
+                emailId: row.id,
+                subject: row.subject,
+                sender: row.fromName ?? row.fromAddress,
+                receivedAt: row.receivedAt.toISOString(),
+                kind: signal.kind,
+                deadline:
+                  signal.deadline &&
+                  resolveDeadline(signal.deadline, row.receivedAt, now),
+                gmailUrl: gmailUrl(row.messageId, this.config),
+              },
+            ]
+          : [];
+      })
+      .sort(byUrgency);
+  }
+
+  syncState(now = new Date()): EmailSyncState {
+    const failedLast = this.lastAttempt?.outcome === 'falhou';
+    const fresh =
+      this.lastSuccessAt !== null &&
+      now.getTime() - this.lastSuccessAt.getTime() <
+        EMAIL_STALE_HOURS * 3_600_000;
+
+    return {
+      configured: this.configured,
+      mailbox: this.config?.mailbox ?? null,
+      runningSince: this.runningSince?.toISOString() ?? null,
+      lastSuccessAt: this.lastSuccessAt?.toISOString() ?? null,
+      lastAttempt: this.lastAttempt,
+      freshness:
+        this.lastSuccessAt === null
+          ? 'sem-dados'
+          : fresh && !failedLast
+            ? 'em-dia'
+            : 'desatualizado',
+    };
+  }
+
+  private finish(
+    outcome: 'ok' | 'parcial' | 'falhou',
+    failed: number,
+    message: string | null,
+  ): void {
+    const finishedAt = new Date();
+
+    this.lastAttempt = {
+      finishedAt: finishedAt.toISOString(),
+      outcome,
+      failed,
+      message,
+    };
+
+    if (outcome === 'ok') {
+      this.lastSuccessAt = finishedAt;
+    }
   }
 
   get configured(): boolean {
@@ -201,6 +258,7 @@ export class EmailService {
     }
 
     this.running = true;
+    this.runningSince = new Date();
 
     const started = Date.now();
     const failed: string[] = [];
@@ -237,6 +295,14 @@ export class EmailService {
         `Sincronização: ${mails.length} lidos, ${stored} novos, ${linked} vinculados, ${relinked} revinculados, ${classified} classificados em ${Date.now() - started}ms`,
       );
 
+      this.finish(
+        failed.length === 0 ? 'ok' : 'parcial',
+        failed.length,
+        failed.length === 0
+          ? null
+          : `${failed.length} de ${mails.length} emails não foram gravados.`,
+      );
+
       return {
         fetched: mails.length,
         stored,
@@ -248,6 +314,14 @@ export class EmailService {
         tookMs: Date.now() - started,
       };
     } catch (error) {
+      this.finish(
+        'falhou',
+        1,
+        error instanceof ImapError
+          ? error.message
+          : 'A sincronização parou no meio. Veja o log da API.',
+      );
+
       if (error instanceof ImapError) {
         this.logger.error(`IMAP falhou: ${error.message}`);
 
@@ -260,6 +334,7 @@ export class EmailService {
       throw error;
     } finally {
       this.running = false;
+      this.runningSince = null;
     }
   }
 

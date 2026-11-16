@@ -16,6 +16,7 @@ import { canonicalJobUrl } from '../job/discovery/canonical-url';
 import { active } from './active';
 import { nextFollowUpAfter } from './follow-up';
 import { fingerprint, labelFor, snapshotOf } from './resume-snapshot';
+import { hasBeenSent, isSending } from './sent';
 import type { ApplicationModel, JobModel } from '../generated/prisma/models';
 
 /** O que a API expõe da vaga. Menos que a tabela, de propósito. */
@@ -171,12 +172,13 @@ export class ApplicationService {
         });
       }
 
-      const resumeVersionId = await freezeResume(
-        tx,
-        input.profileId,
-        job.id,
-        profile.resume,
-      );
+      // Rascunho não congela: nada foi enviado ainda, e o currículo que vale é
+      // o do momento do envio (ver `sent.ts`). Criada já como enviada, o
+      // momento do envio é agora.
+      const appliedAt = input.appliedAt ? new Date(input.appliedAt) : null;
+      const resumeVersionId = hasBeenSent({ status, appliedAt, reached: [] })
+        ? await freezeResume(tx, input.profileId, job.id, profile.resume)
+        : null;
 
       const application = await tx.application.create({
         data: {
@@ -184,7 +186,7 @@ export class ApplicationService {
           jobId: job.id,
           status,
           notes: input.notes ?? null,
-          appliedAt: input.appliedAt ? new Date(input.appliedAt) : null,
+          appliedAt,
           resumeVersionId,
         },
         include: {
@@ -226,7 +228,14 @@ export class ApplicationService {
     const row = await this.prisma.$transaction(async (tx) => {
       const current = await tx.application.findFirst({
         where: { id, ...active },
-        select: { id: true, jobId: true, status: true },
+        select: {
+          id: true,
+          profileId: true,
+          jobId: true,
+          status: true,
+          appliedAt: true,
+          statusEvents: { select: { toStatus: true } },
+        },
       });
 
       if (!current) {
@@ -252,18 +261,55 @@ export class ApplicationService {
         });
       }
 
+      const appliedAt =
+        input.appliedAt === undefined
+          ? current.appliedAt
+          : input.appliedAt
+            ? new Date(input.appliedAt)
+            : null;
+      const before = {
+        status: current.status,
+        appliedAt: current.appliedAt,
+        reached: current.statusEvents.map((event) => event.toStatus),
+      };
+      const after = {
+        status: input.status ?? current.status,
+        appliedAt,
+        reached: before.reached,
+      };
+
+      // O envio é o momento de congelar: troca a versão do rascunho (de
+      // quando a vaga foi anotada, ou nenhuma) pela que vale agora, a
+      // adaptada para a vaga se houver. Fora do envio a versão não muda.
+      let resumeVersionId: string | null = null;
+
+      if (isSending(before, after)) {
+        const profile = await tx.profile.findUnique({
+          where: { id: current.profileId },
+          select: { resume: true },
+        });
+
+        resumeVersionId = await freezeResume(
+          tx,
+          current.profileId,
+          current.jobId,
+          profile?.resume,
+        );
+      }
+
       const application = await tx.application.update({
         where: { id },
         data: {
+          // Sem currículo para congelar, fica o que havia: trocar por nulo
+          // apagaria a única pista do que foi mandado.
+          ...(resumeVersionId !== null && { resumeVersionId }),
           ...(input.status !== undefined && { status: input.status }),
           // Status novo, relógio novo: o lembrete volta a valer pela regra
           // do status que acabou de começar.
           ...(input.status !== undefined &&
             input.status !== current.status && { nextFollowUpAt: null }),
           ...(input.notes !== undefined && { notes: input.notes }),
-          ...(input.appliedAt !== undefined && {
-            appliedAt: input.appliedAt ? new Date(input.appliedAt) : null,
-          }),
+          ...(input.appliedAt !== undefined && { appliedAt }),
         },
         include: {
           job: { select: jobSelect },

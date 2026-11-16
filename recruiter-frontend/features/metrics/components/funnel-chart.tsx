@@ -33,9 +33,42 @@ const stageFill: Record<FunnelStep["stage"], string> = {
   oferta: "bg-emerald-500 dark:bg-emerald-400",
 };
 
-export function FunnelChart({ steps }: { steps: FunnelStep[] }) {
+/**
+ * Por que a taxa de uma etapa não aparece. Dito por etapa porque o corte vale
+ * para a etapa ANTERIOR de cada conversão: "entrevista" pode ficar sem taxa
+ * enquanto "triagem" tem a sua, e um aviso geral não explicaria isso.
+ */
+export function omittedReason(
+  steps: FunnelStep[],
+  index: number,
+  minimumForRates: number,
+): string | null {
+  if (index === 0 || steps[index].conversion !== null) {
+    return null;
+  }
+
+  const previous = steps[index - 1];
+
+  if (previous.reached === 0) {
+    return `sem taxa: ninguém em ${previous.stage}`;
+  }
+
+  return `sem taxa: ${previous.reached} em ${previous.stage}, mínimo ${minimumForRates}`;
+}
+
+export function FunnelChart({
+  steps,
+  minimumForRates,
+}: {
+  steps: FunnelStep[];
+  minimumForRates: number;
+}) {
   const [hover, setHover] = useState<string | null>(null);
   const entry = steps[0]?.reached ?? 0;
+  // "% do topo" é uma conversão também, com o topo de denominador: segue o
+  // mesmo corte de amostra das taxas, ou mostraria em hover o que a tela
+  // acabou de omitir por ser ruído.
+  const showFromTop = entry >= Math.max(1, minimumForRates);
 
   return (
     <ol className="flex flex-col gap-3">
@@ -52,12 +85,18 @@ export function FunnelChart({ steps }: { steps: FunnelStep[] }) {
               {/* Tinta neutra, não a cor da série: a barra ao lado já carrega
                   a identidade, e número colorido compete com ela. */}
               <span className="font-medium tabular-nums">{step.reached}</span>
-              {step.conversion !== null && (
+              {step.conversion !== null ? (
                 <span className="text-xs text-zinc-500 tabular-nums dark:text-zinc-400">
                   {Math.round(step.conversion * 100)}%
                 </span>
+              ) : (
+                omittedReason(steps, index, minimumForRates) && (
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                    {omittedReason(steps, index, minimumForRates)}
+                  </span>
+                )
               )}
-              {hover === step.stage && entry > 0 && (
+              {hover === step.stage && showFromTop && index > 0 && (
                 <span className="text-xs text-zinc-400 tabular-nums dark:text-zinc-500">
                   {Math.round((step.reached / entry) * 100)}% do topo
                 </span>
