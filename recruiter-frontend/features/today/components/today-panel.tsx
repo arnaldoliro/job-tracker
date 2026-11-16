@@ -480,7 +480,9 @@ function SyncStatus({ sync }: { sync: EmailSyncState }) {
           A próxima sincronização tenta de novo.
         </p>
       )}
-      {error && (
+      {/* A falha do clique já volta no estado da sincronização acima; repetir
+          a mesma frase só a mostraria duas vezes. */}
+      {error && error !== last?.message && (
         <p role="alert" className="text-red-600 dark:text-red-400">
           {error}
         </p>
