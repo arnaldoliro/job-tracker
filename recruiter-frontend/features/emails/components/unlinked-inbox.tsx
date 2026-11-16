@@ -56,9 +56,9 @@ export function UnlinkedInbox({
   const allSelected = emails.length > 0 && present.length === emails.length;
   const tooMany = present.length > RESOLVE_BATCH;
 
-  const runSync = () =>
+  const runSync = (days?: 90) =>
     startSync(async () => {
-      setSync(await syncEmailsAction());
+      setSync(await syncEmailsAction(days));
     });
 
   const toggle = (id: string) =>
@@ -118,7 +118,7 @@ export function UnlinkedInbox({
 
         <button
           type="button"
-          onClick={runSync}
+          onClick={() => runSync()}
           disabled={syncing || !status.configured}
           className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-[0_8px_30px_-8px] shadow-accent/70 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
         >
@@ -127,11 +127,30 @@ export function UnlinkedInbox({
         </button>
       </header>
 
+      {status.configured && (
+        <div className="rounded-xl border border-amber-400/20 p-4 text-sm">
+          <p>
+            Ampliou o filtro do Gmail? Aplique o rótulo também às conversas
+            existentes e recupere o histórico. O app só verá mensagens dentro
+            desse rótulo.
+          </p>
+          <button
+            type="button"
+            onClick={() => runSync(90)}
+            disabled={syncing}
+            className="mt-2 underline disabled:opacity-50"
+          >
+            Resgatar últimos 90 dias
+          </button>
+        </div>
+      )}
+
       {!status.configured ? (
         <p className="cine-glass rounded-2xl px-5 py-4 text-sm text-zinc-400">
           Email não configurado. Defina <code>IMAP_HOST</code>,{" "}
-          <code>IMAP_USER</code> e <code>IMAP_PASSWORD</code> no <code>.env</code>{" "}
-          do backend, com uma app password — nunca a senha principal da conta.
+          <code>IMAP_USER</code> e <code>IMAP_PASSWORD</code> no{" "}
+          <code>.env</code> do backend, com uma app password — nunca a senha
+          principal da conta.
         </p>
       ) : (
         <p className="text-xs text-zinc-400">

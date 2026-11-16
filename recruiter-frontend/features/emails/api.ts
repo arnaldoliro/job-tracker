@@ -66,9 +66,11 @@ export async function getEmailStatus(): Promise<EmailStatus> {
   return emailStatusSchema.parse(await request("/emails/status"));
 }
 
-export async function syncEmails(): Promise<EmailSyncResult> {
+export async function syncEmails(days?: 90): Promise<EmailSyncResult> {
   return emailSyncResultSchema.parse(
-    await request("/emails/sync", { method: "POST" }),
+    await request(days === 90 ? "/emails/sync?days=90" : "/emails/sync", {
+      method: "POST",
+    }),
   );
 }
 
