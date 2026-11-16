@@ -93,4 +93,81 @@ describe('avisos de ação por email', () => {
         ?.deadlineLabel,
     ).toBeNull();
   });
+  it.each([
+    ['Agende sua entrevista', 'Escolha o melhor horário no link abaixo.'],
+    ['Próximos passos', 'Por favor, agende a entrevista técnica até sexta.'],
+    ['Agendamento de entrevista', 'Selecione um horário disponível.'],
+    [
+      'Processo seletivo',
+      'Escolha um horário para a sua entrevista com o time.',
+    ],
+    ['Schedule your interview', 'Use the link below to pick a slot.'],
+    [
+      'Next steps',
+      'We would like to invite you to an interview with the team.',
+    ],
+    ['Book your technical interview', ''],
+    ['Interview invitation: Frontend Engineer', ''],
+  ])('reconhece convite para agendar entrevista: %s', (subject, body) => {
+    expect(actionRequired(mail(subject, body))?.kind).toBe('entrevista');
+  });
+
+  it.each([
+    ['Desafio técnico', 'Realize o desafio técnico pelo link até o prazo.'],
+    ['Próxima etapa', 'Seu teste técnico está disponível na plataforma.'],
+    [
+      'Avaliação online',
+      'Você foi convidado para fazer a avaliação de lógica.',
+    ],
+    ['Convite para o teste', ''],
+    ['Next step', 'Please complete the online assessment within 5 days.'],
+    ['Your coding challenge', 'Start the coding challenge when you are ready.'],
+    ['Take-home exercise', 'Attached you will find the take-home.'],
+  ])('reconhece teste ou avaliação: %s', (subject, body) => {
+    expect(actionRequired(mail(subject, body))?.kind).toBe('teste');
+  });
+
+  it.each([
+    [
+      'Webinar: como se sair bem na entrevista',
+      'Agende sua entrevista simulada.',
+    ],
+    [
+      'Dicas para sua próxima entrevista',
+      'Schedule your interview with confidence.',
+    ],
+    ['Novas vagas para você', 'Complete the online assessment to stand out.'],
+    ['Newsletter de carreira', 'Realize o teste de perfil gratuito.'],
+  ])('ignora divulgação: %s', (subject, body) => {
+    expect(actionRequired(mail(subject, body))).toBeNull();
+  });
+
+  it.each([
+    'Unfortunately, we have decided to move forward with other candidates.',
+    'We will not be moving forward. Schedule your interview link is no longer valid.',
+    'Decidimos seguir com outros candidatos. Agende sua entrevista não está mais disponível.',
+    'Você não foi selecionado para a próxima etapa do desafio técnico.',
+  ])('ignora negativa mesmo citando convite: %s', (body) => {
+    expect(actionRequired(mail('Atualização do processo', body))).toBeNull();
+  });
+
+  it.each([
+    'Obrigado!\n> Agende sua entrevista pelo link',
+    'Obrigado!\n-----Original Message-----\nSchedule your interview',
+    'Obrigado!\nDe: Recrutamento <vagas@example.com>\nRealize o desafio técnico',
+    'Obrigado!\nEm seg., 10 de nov. de 2026, Recrutamento escreveu:\nAgende sua entrevista',
+  ])('ignora convite citado em resposta: %j', (body) => {
+    expect(actionRequired(mail('Re: Processo seletivo', body))).toBeNull();
+  });
+
+  it('não confunde menção futura a teste com convite', () => {
+    expect(
+      actionRequired(
+        mail(
+          'Candidatura recebida',
+          'Se aprovado na triagem, haverá um teste técnico e uma entrevista.',
+        ),
+      ),
+    ).toBeNull();
+  });
 });
