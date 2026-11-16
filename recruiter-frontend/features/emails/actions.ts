@@ -32,7 +32,10 @@ export type SyncState =
   | { status: "error"; message: string }
   | { status: "success"; result: EmailSyncResult };
 
-function toError(error: unknown, fallback: string): { status: "error"; message: string } {
+function toError(
+  error: unknown,
+  fallback: string,
+): { status: "error"; message: string } {
   if (error instanceof ApiError) {
     return { status: "error", message: error.message };
   }
@@ -40,11 +43,12 @@ function toError(error: unknown, fallback: string): { status: "error"; message: 
   return { status: "error", message: fallback };
 }
 
-export async function syncEmailsAction(): Promise<SyncState> {
+export async function syncEmailsAction(days?: 90): Promise<SyncState> {
   try {
-    const result = await syncEmails();
+    const result = await syncEmails(days);
 
     revalidatePath("/emails");
+    revalidatePath("/hoje");
 
     return { status: "success", result };
   } catch (error) {
@@ -102,7 +106,9 @@ export async function createFromEmailAction(
  * linha com "Desfazer" ali mesmo, e recarregar a lista o faria sumir antes
  * de dar tempo de desfazer um clique errado.
  */
-export async function dismissEmailAction(id: string): Promise<EmailActionState> {
+export async function dismissEmailAction(
+  id: string,
+): Promise<EmailActionState> {
   try {
     await dismissEmail(id);
 
