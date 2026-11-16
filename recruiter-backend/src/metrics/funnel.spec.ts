@@ -175,6 +175,62 @@ describe('buildFunnel', () => {
     expect(etapa(buildFunnel(poucas, 3), 'triagem').conversion).not.toBeNull();
   });
 
+  it('o mínimo vale para a etapa ANTERIOR, não para o total', () => {
+    // Regressão: com o total acima do mínimo, toda taxa aparecia, inclusive
+    // "triagem → entrevista" calculada sobre 2 candidaturas.
+    const funil = buildFunnel(
+      [
+        ...Array.from({ length: 10 }, (_, i) => cand(`apl-${i}`, ['aplicado'])),
+        cand('tri-1', ['aplicado', 'triagem']),
+        cand('ent-1', ['aplicado', 'triagem', 'entrevista']),
+      ],
+      10,
+    );
+
+    // 12 aplicadas: denominador suficiente.
+    expect(etapa(funil, 'triagem').conversion).toBeCloseTo(2 / 12);
+    // 2 na triagem: abaixo do mínimo, mesmo com 12 no total.
+    expect(etapa(funil, 'entrevista').reached).toBe(1);
+    expect(etapa(funil, 'entrevista').conversion).toBeNull();
+    expect(etapa(funil, 'teste').conversion).toBeNull();
+  });
+
+  it('etapa anterior exatamente no mínimo libera a taxa', () => {
+    const funil = buildFunnel(
+      [
+        ...Array.from({ length: 4 }, (_, i) => cand(`apl-${i}`, ['aplicado'])),
+        cand('tri-1', ['triagem']),
+      ],
+      5,
+    );
+
+    expect(etapa(funil, 'triagem').conversion).toBeCloseTo(1 / 5);
+    expect(etapa(funil, 'entrevista').conversion).toBeNull();
+  });
+
+  it('rascunhos não completam a amostra mínima', () => {
+    // Regressão: o corte olhava `applications.length`, que inclui rascunhos.
+    // Nove enviadas e cinco rascunhos davam 14 e liberavam a taxa sobre 9.
+    const funil = buildFunnel(
+      [
+        ...Array.from({ length: 8 }, (_, i) => cand(`apl-${i}`, ['aplicado'])),
+        cand('tri-1', ['aplicado', 'triagem']),
+        ...Array.from({ length: 5 }, (_, i) => cand(`ras-${i}`, ['rascunho'])),
+      ],
+      10,
+    );
+
+    expect(etapa(funil, 'aplicado').reached).toBe(9);
+    expect(funil.every((f) => f.conversion === null)).toBe(true);
+  });
+
+  it('mínimo zero não divide por zero', () => {
+    const funil = buildFunnel([cand('app-1', ['aplicado'])], 0);
+
+    expect(etapa(funil, 'triagem').conversion).toBe(0);
+    expect(etapa(funil, 'entrevista').conversion).toBeNull();
+  });
+
   it('conversão é nula, não zero, quando não há de onde converter', () => {
     const funil = buildFunnel([], COM_TAXAS);
 

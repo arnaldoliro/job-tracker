@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { ApplicationFacts, Metrics } from '@recruit/shared';
 import { active } from '../application/active';
 import { PrismaService } from '../prisma/prisma.service';
+import { countBySource, isSent } from './by-source';
 import { buildFunnel } from './funnel';
 import { responseTime } from './response-time';
 import { buildDailySeries, buildSourceYield, SERIES_DAYS } from './series';
@@ -17,7 +18,10 @@ import { buildDailySeries, buildSourceYield, SERIES_DAYS } from './series';
  * 8: esquecer a condição não dá erro, dá um número errado com cara de certo.
  */
 
-/** Abaixo disto, percentual é ruído e o contrato devolve `null`. */
+/**
+ * Abaixo disto, percentual é ruído e o contrato devolve `null`. Vale para o
+ * denominador de cada taxa (a etapa anterior do funil), não para o total.
+ */
 const MIN_FOR_RATES = 10;
 
 @Injectable()
@@ -75,6 +79,15 @@ export class MetricsService {
       reached: row.statusEvents.map((event) => event.toStatus),
     }));
 
+    // O que decide se foi enviada: o histórico, não só o status atual. Ver
+    // `isSent`.
+    const sending = rows.map((row) => ({
+      status: row.status,
+      appliedAt: row.appliedAt,
+      reached: row.statusEvents.map((event) => event.toStatus),
+      job: row.job,
+    }));
+
     return {
       funnel: buildFunnel(facts, MIN_FOR_RATES),
       rejected: rows.filter((row) => row.status === 'rejeitado').length,
@@ -88,11 +101,13 @@ export class MetricsService {
       emailsReceived: emails.length,
       emailsLinked: emails.filter((email) => email.applicationId !== null)
         .length,
-      bySource: countBySource(rows),
+      bySource: countBySource(sending),
       sourceYield: buildSourceYield(
         seen,
         urls(saved.map((row) => row.job.url)),
-        urls(rows.map((row) => row.job.url)),
+        // `applied` é candidatura ENVIADA: rascunho de uma vaga salva já
+        // conta em `saved`, e contá-lo aqui também inflaria o rendimento.
+        urls(sending.filter(isSent).map((row) => row.job.url)),
       ),
       emailsByDay: buildDailySeries(
         emails.map((email) => email.receivedAt),
@@ -123,28 +138,6 @@ function answered(application: ApplicationFacts): boolean {
   return application.reached.some(
     (status) => status !== 'aplicado' && status !== 'rascunho',
   );
-}
-
-function countBySource(
-  rows: { job: { source: string | null } }[],
-): { source: string; count: number }[] {
-  const tally = new Map<string, number>();
-
-  for (const row of rows) {
-    // Nulo vira `desconhecido`, NUNCA é filtrado fora: descartar faz o total
-    // parar de fechar com `active` sem que nada acuse.
-    //
-    // E não vira `manual`: `manual` é o que o código grava quando VOCÊ colou um
-    // link ou criou a partir de um email. Juntar os dois apagaria a diferença
-    // entre "cadastrei à mão" e "a coluna estava vazia".
-    const source = row.job.source ?? 'desconhecido';
-
-    tally.set(source, (tally.get(source) ?? 0) + 1);
-  }
-
-  return [...tally.entries()]
-    .map(([source, count]) => ({ source, count }))
-    .sort((a, b) => b.count - a.count);
 }
 
 /** `Job.url` é anulável — vaga criada à mão pode não ter link. */
