@@ -38,6 +38,37 @@ const boardList = z.preprocess(
     .default([]),
 );
 
+/**
+ * Remetentes de recrutamento para a busca de resgate no Gmail, separados por
+ * vírgula: endereço (`vagas@empresa.com`) ou domínio (`empresa.com`).
+ *
+ * Fica no .env, e não no código, por dois motivos: a lista diz com quais
+ * empresas a pessoa está em processo, o que não pode ir para um repositório
+ * público (§7), e cada pessoa que usa o app tem a sua. O formato é fechado
+ * porque o valor entra numa busca do Gmail: espaço, chave ou parêntese
+ * mudariam a consulta.
+ */
+const senderList = z.preprocess(
+  (value) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((sender) => sender.trim().toLowerCase())
+          .filter(Boolean)
+      : value,
+  z
+    .array(
+      z
+        .string()
+        .regex(
+          /^(?:[a-z0-9._%+-]+@)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/,
+          'Remetente inválido: use um endereço de email ou um domínio.',
+        ),
+    )
+    .max(30)
+    .default([]),
+);
+
 export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -105,6 +136,8 @@ export const envSchema = z.object({
   DISCOVERY_GREENHOUSE_BOARDS: boardList,
   DISCOVERY_ASHBY_BOARDS: boardList,
   DISCOVERY_LEVER_BOARDS: boardList,
+  /** Ver `senderList`. Vazio: a tela Hoje não mostra a busca de resgate. */
+  RECRUITING_RESCUE_SENDERS: senderList,
   IMAP_SYNC_ON_BOOT: z.preprocess(
     (value) => (typeof value === 'string' ? value.trim() === 'true' : value),
     z.boolean().default(true),
