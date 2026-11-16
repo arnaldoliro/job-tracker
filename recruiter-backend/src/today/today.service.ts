@@ -22,7 +22,7 @@ export class TodayService {
   ) {}
 
   async today(profileId: string, now: Date = new Date()): Promise<Today> {
-    const [applications, saved, suggestions] = await Promise.all([
+    const [applications, saved, suggestions, emailActions] = await Promise.all([
       this.prisma.application.findMany({
         where: { profileId, ...active },
         select: {
@@ -53,6 +53,7 @@ export class TodayService {
         },
       }),
       this.emails.suggestions(profileId),
+      this.emails.actionItems(profileId, now),
     ]);
 
     const pipeline = Object.fromEntries(
@@ -94,6 +95,7 @@ export class TodayService {
     followUps.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
 
     return {
+      emailActions,
       followUps,
       pendingSuggestions: suggestions.length,
       savedNotApplied: saved.map((row) => ({

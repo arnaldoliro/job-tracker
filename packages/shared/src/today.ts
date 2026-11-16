@@ -66,7 +66,22 @@ export const savedNotAppliedSchema = z.object({
   savedAt: z.iso.datetime(),
 });
 
+export const emailActionSchema = z.object({
+  emailId: z.string(),
+  subject: z.string(),
+  sender: z.string(),
+  receivedAt: z.iso.datetime(),
+  kind: z.enum(['entrevista', 'teste', 'pendencia']),
+  deadlineLabel: z.string().nullable(),
+  gmailUrl: z.url().nullable(),
+});
+export type EmailAction = z.infer<typeof emailActionSchema>;
+/** Busca manual complementar: não amplia o acesso do IMAP. */
+export const RECRUITING_RESCUE_QUERY =
+  'newer_than:90d {from:noreplyhiring@ciandt.com from:fcinterview.fcamara.com.br from:micro1.ai from:mailer.digai.ai}';
+
 export const todaySchema = z.object({
+  emailActions: z.array(emailActionSchema).default([]),
   followUps: z.array(dueFollowUpSchema),
   /** Sugestões de status lidas dos emails, esperando o seu clique. */
   pendingSuggestions: z.number().int(),
