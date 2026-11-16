@@ -34,10 +34,15 @@ export function buildFunnel(
 ): FunnelStep[] {
   const depths = applications.map(deepestStage).filter((depth) => depth >= 0);
 
-  // Abaixo do mínimo, percentual é ruído: "75% de conversão" sobre quatro
+  // Abaixo do mínimo, percentual é ruído: "60% de conversão" sobre cinco
   // candidaturas afirma uma precisão que não existe. O corte é aqui, não na
   // tela, para que o frontend não CONSIGA imprimir o que é ruído.
-  const rates = applications.length >= minimumForRates;
+  //
+  // O mínimo vale para o DENOMINADOR de cada taxa, a etapa anterior, e não
+  // para o total de candidaturas: com 59 aplicadas e 5 na triagem, a taxa
+  // triagem → entrevista é 3 de 5, por maior que seja o total. O piso de 1
+  // evita dividir por zero mesmo se alguém passar mínimo zero.
+  const floor = Math.max(1, minimumForRates);
 
   return FUNNEL_STAGES.map((stage, index) => {
     const reached = depths.filter((depth) => depth >= index).length;
@@ -50,9 +55,7 @@ export function buildFunnel(
       // `null` e não zero quando não há de onde converter: 0% afirma que
       // ninguém passou, e "não havia ninguém" é outra coisa.
       conversion:
-        !rates || previous === null || previous === 0
-          ? null
-          : reached / previous,
+        previous === null || previous < floor ? null : reached / previous,
     };
   });
 }
