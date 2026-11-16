@@ -13,7 +13,14 @@ describe('avisos de ação por email', () => {
           'Você foi convidado para realizar uma entrevista técnica. Prazo Até 28 de novembro de 2026.',
         ),
       ),
-    ).toEqual({ kind: 'entrevista', deadlineLabel: '28 de novembro de 2026' });
+    ).toEqual({
+      kind: 'entrevista',
+      deadline: {
+        text: 'Até 28 de novembro de 2026',
+        day: { year: 2026, month: 11, day: 28 },
+        offsetMs: null,
+      },
+    });
   });
   it('reconhece triagem e candidatura incompleta', () => {
     expect(
@@ -36,7 +43,11 @@ describe('avisos de ação por email', () => {
       ),
     ).toEqual({
       kind: 'entrevista',
-      deadlineLabel: '48 hours a partir do envio',
+      deadline: {
+        text: 'expire in 48 hours',
+        day: null,
+        offsetMs: 48 * 3_600_000,
+      },
     });
   });
   it('reconhece etapa desbloqueada', () => {
@@ -90,7 +101,7 @@ describe('avisos de ação por email', () => {
   it('não inventa prazo ausente', () => {
     expect(
       actionRequired(mail('Entrevista para a vaga de desenvolvimento'))
-        ?.deadlineLabel,
+        ?.deadline,
     ).toBeNull();
   });
   it.each([

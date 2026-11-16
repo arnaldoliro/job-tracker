@@ -2,7 +2,7 @@
 
 A tela Hoje sinaliza emails com remetente verificado dos últimos 90 dias que mencionam entrevista, etapa de teste ou candidatura incompleta. A regra é local e não chama IA. Inclui emails ainda sem vínculo (compartilhados entre os perfis) e os vinculados ao perfil selecionado, exceto candidaturas excluídas, rejeitadas ou canceladas.
 
-O prazo exibido é texto extraído do email, não confirmação de que o portal está aberto. Ausência de aviso não prova ausência de pendências. A detecção é heurística e pode precisar de revisão manual. Convites antigos podem continuar aparecendo até serem dispensados ou a candidatura ser encerrada. Dispensar oculta o aviso e o email da lista de pendentes do app, preservando o Gmail e a linha do tempo; Desfazer restaura enquanto o card está na tela.
+O prazo só vira data quando o email dá dia, mês e ano válidos (prazo do dia, sem hora) ou um prazo relativo em horas ou dias corridos, contado do recebimento; sem ano, com data inválida ou em dias úteis, fica como texto e estado desconhecido. O trecho original sempre aparece. Os avisos vêm ordenados: prazo próximo primeiro, depois sem prazo, vencidos no fim. Prazo vencido diz que a data do email passou, não que o portal fechou. Ausência de aviso não prova ausência de pendências. A detecção é heurística e pode precisar de revisão manual. Convites antigos podem continuar aparecendo até serem dispensados ou a candidatura ser encerrada. Dispensar oculta o aviso e o email da lista de pendentes do app, preservando o Gmail e a linha do tempo; Desfazer restaura enquanto o card está na tela.
 
 ## Recuperar mensagens fora do filtro
 

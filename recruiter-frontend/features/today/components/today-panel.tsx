@@ -10,6 +10,7 @@ import {
 import type {
   ApplicationStatus,
   EmailAction,
+  EmailDeadline,
   DueFollowUp,
   FollowUpAction,
   Today,
@@ -66,7 +67,7 @@ export function TodayPanel({ today }: { today: Today }) {
       {today.emailActions.length > 0 && (
         <Section
           title={`Emails que podem exigir ação (${today.emailActions.length})`}
-          hint="Convites e pendências dos últimos 90 dias, inclusive sem candidatura vinculada. Confirme no portal se a etapa ainda está disponível."
+          hint="Convites e pendências dos últimos 90 dias, inclusive sem candidatura vinculada. Prazo mais próximo primeiro; vencidos no fim. Confirme no portal se a etapa ainda está disponível."
         >
           <ul className="flex flex-col gap-3">
             {today.emailActions.map((item) => (
@@ -291,7 +292,15 @@ function EmailActionItem({ item }: { item: EmailAction }) {
       }
     })();
   return (
-    <li className="rounded-xl border border-amber-400/30 p-4 text-sm">
+    <li
+      className={`rounded-xl border p-4 text-sm ${
+        urgent(item.deadline)
+          ? "border-red-400/60"
+          : item.deadline?.state === "vencido"
+            ? "border-zinc-300 dark:border-zinc-700"
+            : "border-amber-400/30"
+      }`}
+    >
       {dismissed ? (
         <p>
           Aviso dispensado.{" "}
@@ -312,12 +321,7 @@ function EmailActionItem({ item }: { item: EmailAction }) {
               timeZone: "America/Sao_Paulo",
             })}
           </p>
-          <p className="mt-2">
-            {item.deadlineLabel
-              ? `Prazo mencionado no email: ${item.deadlineLabel}.`
-              : "Prazo não identificado: confira o email."}{" "}
-            O prazo não garante que a vaga continue aberta.
-          </p>
+          <DeadlineNote deadline={item.deadline} />
           <div className="mt-3 flex flex-wrap gap-4">
             {gmail ? (
               <a
@@ -354,6 +358,84 @@ function EmailActionItem({ item }: { item: EmailAction }) {
       )}
     </li>
   );
+}
+
+/** Prazo de até dois dias: o que some se você deixar para amanhã. */
+function urgent(deadline: EmailDeadline | null): boolean {
+  return (
+    deadline?.state === "proximo" &&
+    deadline.daysLeft !== null &&
+    deadline.daysLeft <= 2
+  );
+}
+
+const SP = "America/Sao_Paulo";
+
+/**
+ * O prazo dito com a precisão que o email deu, e só ela: data sem hora sai sem
+ * hora. O trecho original vai junto, para você conferir o que foi entendido.
+ */
+function DeadlineNote({ deadline }: { deadline: EmailDeadline | null }) {
+  if (!deadline) {
+    return (
+      <p className="mt-2">
+        Nenhum prazo identificado no email: confira a mensagem. O portal pode
+        ter prazo próprio.
+      </p>
+    );
+  }
+
+  const quote = <q className="italic">{deadline.text}</q>;
+
+  if (deadline.state === "desconhecido") {
+    return (
+      <p className="mt-2">
+        O email cita um prazo ({quote}), mas sem data completa para calcular.
+        Confira na mensagem.
+      </p>
+    );
+  }
+
+  const when = deadline.dueAt
+    ? new Date(deadline.dueAt).toLocaleString("pt-BR", {
+        timeZone: SP,
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : new Date(`${deadline.dueDate}T12:00:00Z`).toLocaleDateString("pt-BR", {
+        timeZone: "UTC",
+      });
+
+  if (deadline.state === "vencido") {
+    return (
+      <p className="mt-2 text-zinc-500 dark:text-zinc-400">
+        O prazo citado no email ({quote}) passou em {when}. Isso não prova que a
+        etapa fechou no portal: confira antes de descartar.
+      </p>
+    );
+  }
+
+  return (
+    <p className="mt-2">
+      <span
+        className={
+          urgent(deadline) ? "font-semibold text-red-600 dark:text-red-400" : ""
+        }
+      >
+        {relativeDay(deadline.daysLeft)}: {when}
+      </span>
+      {deadline.dueAt && " (contado de quando o email chegou)"}. Trecho do
+      email: {quote}. O prazo não garante que a vaga continue aberta.
+    </p>
+  );
+}
+
+function relativeDay(daysLeft: number | null): string {
+  if (daysLeft === null) return "Prazo";
+  if (daysLeft <= 0) return "Vence hoje";
+  if (daysLeft === 1) return "Vence amanhã";
+
+  return `Vence em ${daysLeft} dias`;
 }
 
 function Section({

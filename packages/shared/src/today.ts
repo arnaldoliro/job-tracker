@@ -66,17 +66,39 @@ export const savedNotAppliedSchema = z.object({
   savedAt: z.iso.datetime(),
 });
 
+/**
+ * Prazo citado no email. `text` é o trecho como o email escreveu.
+ *
+ * `dueDate` (só o dia) e `dueAt` (instante) nunca vêm juntos: data sem hora
+ * no email não ganha hora aqui. `dueAt` só existe para prazo relativo
+ * ("expira em 48 horas"), contado do recebimento. Sem ano, com data
+ * inválida ou em "dias úteis", os dois são nulos e o estado é `desconhecido`.
+ *
+ * `vencido` diz que a data do email passou, NÃO que a etapa fechou no portal.
+ */
+export const emailDeadlineSchema = z.object({
+  text: z.string(),
+  dueDate: z.iso.date().nullable(),
+  dueAt: z.iso.datetime().nullable(),
+  state: z.enum(['proximo', 'vencido', 'desconhecido']),
+  /** Dias de calendário até o prazo, em São Paulo. Negativo: já passou. */
+  daysLeft: z.number().int().nullable(),
+});
+export type EmailDeadline = z.infer<typeof emailDeadlineSchema>;
+
 export const emailActionSchema = z.object({
   emailId: z.string(),
   subject: z.string(),
   sender: z.string(),
   receivedAt: z.iso.datetime(),
   kind: z.enum(['entrevista', 'teste', 'pendencia']),
-  deadlineLabel: z.string().nullable(),
+  /** Nulo: o email não cita prazo nenhum. */
+  deadline: emailDeadlineSchema.nullable(),
   gmailUrl: z.url().nullable(),
 });
 export type EmailAction = z.infer<typeof emailActionSchema>;
 export const todaySchema = z.object({
+  /** Já em ordem: prazo próximo primeiro, depois sem prazo, vencidos no fim. */
   emailActions: z.array(emailActionSchema).default([]),
   /**
    * Busca do Gmail pelos remetentes de recrutamento do .env

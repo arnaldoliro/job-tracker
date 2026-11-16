@@ -219,4 +219,35 @@ describe('avisos de email em Hoje', () => {
       'Email não encontrado',
     );
   });
+
+  it('estrutura o prazo e põe o mais urgente no topo', async () => {
+    const { service } = setup([
+      mail('vencido', {
+        bodyText: 'Agende sua entrevista até 10/11/2026.',
+        receivedAt: daysBefore(1),
+      }),
+      mail('sem-prazo', { receivedAt: daysBefore(2) }),
+      mail('expira', {
+        subject: 'Desafio técnico',
+        bodyText: 'Realize o desafio técnico. O link expira em 72 horas.',
+        receivedAt: daysBefore(2),
+      }),
+    ]);
+
+    const items = await service.actionItems('perfil-a', NOW);
+
+    expect(items.map((item) => [item.emailId, item.deadline?.state])).toEqual([
+      ['expira', 'proximo'],
+      ['sem-prazo', undefined],
+      ['vencido', 'vencido'],
+    ]);
+    expect(items[0].deadline).toMatchObject({
+      text: 'expira em 72 horas',
+      dueAt: new Date(daysBefore(2).getTime() + 72 * 3_600_000).toISOString(),
+    });
+    expect(items[2].deadline).toMatchObject({
+      text: 'até 10/11/2026',
+      dueDate: '2026-11-10',
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { isJobDigestSender } from './ats';
+import { findDeadline, type DeadlineMention } from './deadline';
 
 /** Sinal para revisão, nunca prova de aprovação ou de vaga ainda aberta. */
 export function actionRequired(mail: {
@@ -7,10 +8,11 @@ export function actionRequired(mail: {
   fromAddress: string;
 }): {
   kind: 'entrevista' | 'teste' | 'pendencia';
-  deadlineLabel: string | null;
+  deadline: DeadlineMention | null;
 } | null {
   if (isJobDigestSender(mail.fromAddress)) return null;
-  const text = normalize(`${mail.subject} ${ownText(mail.bodyText ?? '')}`);
+  const own = `${mail.subject}\n${ownText(mail.bodyText ?? '')}`;
+  const text = normalize(own);
   if (ANNOUNCEMENT.test(normalize(mail.subject)) || CLOSED.test(text))
     return null;
   let kind: 'entrevista' | 'teste' | 'pendencia';
@@ -18,18 +20,9 @@ export function actionRequired(mail: {
   else if (TEST.test(text)) kind = 'teste';
   else if (PENDING.test(text)) kind = 'pendencia';
   else return null;
-  // Não inventa ano nem confunde prazo do email com disponibilidade do portal.
-  const deadline = text.match(
-    /(?:ate|prazo(?: final)?[: ]+)\s*(\d{1,2}\s+de\s+[a-z]+\s+de\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4})\b/,
-  );
-  const relative = text.match(
-    /(?:expira(?:ra)?|expire(?:s)?|valid[oa])\s*(?:em|in|por)?\s*(\d+\s*(?:horas?|hours?|dias?|days?))\b/,
-  );
-  return {
-    kind,
-    deadlineLabel:
-      deadline?.[1] ?? (relative ? `${relative[1]} a partir do envio` : null),
-  };
+  // O prazo sai do texto original, para a tela mostrar como o email
+  // escreveu; a conta (vencido ou não) é de `deadline.ts`.
+  return { kind, deadline: findDeadline(own) };
 }
 
 /**

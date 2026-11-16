@@ -22,6 +22,7 @@ import type {
   TimelineEntry,
 } from '@recruit/shared';
 import { actionRequired } from './action-required';
+import { byUrgency, resolveDeadline } from './deadline';
 import { active } from '../application/active';
 import { ApplicationService } from '../application/application.service';
 import type { Env } from '../config/env';
@@ -145,21 +146,26 @@ export class EmailService {
         messageId: true,
       },
     });
-    return rows.flatMap((row) => {
-      const signal = actionRequired(row);
-      return signal
-        ? [
-            {
-              emailId: row.id,
-              subject: row.subject,
-              sender: row.fromName ?? row.fromAddress,
-              receivedAt: row.receivedAt.toISOString(),
-              ...signal,
-              gmailUrl: gmailUrl(row.messageId, this.config),
-            },
-          ]
-        : [];
-    });
+    return rows
+      .flatMap((row) => {
+        const signal = actionRequired(row);
+        return signal
+          ? [
+              {
+                emailId: row.id,
+                subject: row.subject,
+                sender: row.fromName ?? row.fromAddress,
+                receivedAt: row.receivedAt.toISOString(),
+                kind: signal.kind,
+                deadline:
+                  signal.deadline &&
+                  resolveDeadline(signal.deadline, row.receivedAt, now),
+                gmailUrl: gmailUrl(row.messageId, this.config),
+              },
+            ]
+          : [];
+      })
+      .sort(byUrgency);
   }
 
   get configured(): boolean {
