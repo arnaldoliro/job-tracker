@@ -11,7 +11,7 @@
  * qualquer lugar, e some a primeira linha do currículo quando ela é feita das
  * palavras desse nome. Palavras soltas do nome NÃO são apagadas no resto do
  * texto: sobrenome costuma ser também nome de rua, cidade ou empresa
- * ("Dourado" e "João Dourado"), e apagá-lo destruiria o endereço.
+ * ("Oliveira" e "Rua Oliveira"), e apagá-lo destruiria o endereço.
  *
  * Tudo por expressão sem aninhamento de quantificador — a entrada vem de
  * arquivo do usuário, e uma expressão catastrófica trava o processo.
@@ -128,7 +128,7 @@ function removeName(text: string, fullName: string): string {
   let result = text.replace(sequence, '[nome removido]');
 
   // A primeira linha com texto, quando é feita das palavras do nome: cobre
-  // "CASSIO DOURADO" com o perfil "Cassio Figueredo Dourado".
+  // "MARIA OLIVEIRA" com o perfil "Maria Souza Oliveira".
   const lines = result.split('\n');
   const first = lines.findIndex((line) => line.trim() !== '');
 
