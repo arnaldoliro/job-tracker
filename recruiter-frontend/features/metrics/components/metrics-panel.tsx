@@ -19,6 +19,15 @@ import { SourceYieldChart } from "./source-yield";
  */
 export function MetricsPanel({ metrics }: { metrics: Metrics }) {
   const moved = metrics.funnel.slice(1).some((step) => step.reached > 0);
+  // O corte é por etapa (a anterior de cada conversão), não pelo total de
+  // ativas: com 59 enviadas e 5 em triagem, a taxa de triagem existe e a de
+  // entrevista não. O aviso só aparece quando alguma taxa caiu pelo corte.
+  const thin = metrics.funnel.some(
+    (step, index) =>
+      index > 0 &&
+      step.conversion === null &&
+      metrics.funnel[index - 1].reached > 0,
+  );
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -34,12 +43,12 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
         </p>
       ) : (
         <>
-          {metrics.active < metrics.minimumForRates && (
+          {thin && (
             <p className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-5 py-3 text-sm text-amber-200 backdrop-blur-md">
-              Base pequena: {metrics.active}{" "}
-              {metrics.active === 1 ? "candidatura ativa" : "candidaturas ativas"}
-              . Com poucos números, porcentagem vira ruído — por isso as taxas
-              estão omitidas. Leia as contagens.
+              Algumas taxas do funil estão omitidas: a etapa anterior tem
+              menos de {metrics.minimumForRates} candidaturas, e com poucos
+              números porcentagem vira ruído. Cada etapa diz o motivo; leia as
+              contagens.
             </p>
           )}
 
@@ -79,7 +88,10 @@ export function MetricsPanel({ metrics }: { metrics: Metrics }) {
 
           <div className="grid gap-5 xl:grid-cols-3">
             <Panel index={8} title="Funil" className="xl:col-span-2">
-              <FunnelChart steps={metrics.funnel} />
+              <FunnelChart
+                steps={metrics.funnel}
+                minimumForRates={metrics.minimumForRates}
+              />
 
               {!moved && (
                 // "Sem dados" seria mentira: existe dado, e a resposta é zero.
