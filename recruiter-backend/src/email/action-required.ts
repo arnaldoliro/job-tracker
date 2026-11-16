@@ -29,10 +29,14 @@ export function actionRequired(mail: {
  * Só o texto novo do email. Convite antigo citado numa resposta ("On ...
  * wrote:", "Em ... escreveu:", linhas com ">", cabeçalho do Outlook) já foi
  * tratado quando chegou; reabri-lo faria um "obrigado" virar pendência.
+ *
+ * O cabeçalho do Outlook só conta com cara de cabeçalho: "De:" seguido de
+ * endereço ou da linha "Enviado:". Um "De: segunda a sexta" no corpo cortava
+ * o email ali, e o prazo escrito depois se perdia.
  */
 function ownText(body: string): string {
   return body.split(
-    /\n(?:On .+wrote:|Em .+escreveu:|>|-{2,}\s*(?:original message|mensagem original)|(?:From|De):\s.+)/i,
+    /\n(?:On .+wrote:|Em .+escreveu:|>|-{2,}\s*(?:original message|mensagem original|forwarded message|mensagem encaminhada)|(?:From|De):[^\n]*(?:<[^>\n]*@|\n(?:Sent|Enviad[oa]|Date|Data):))/i,
   )[0];
 }
 

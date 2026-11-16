@@ -171,6 +171,24 @@ describe('avisos de ação por email', () => {
     expect(actionRequired(mail('Re: Processo seletivo', body))).toBeNull();
   });
 
+  it.each([
+    'Obrigado!\nDe: Recrutamento\nEnviado: segunda-feira\nAgende sua entrevista',
+    'Obrigado!\n---------- Forwarded message ---------\nSchedule your interview',
+  ])('ignora convite citado em cabeçalho de resposta: %j', (body) => {
+    expect(actionRequired(mail('Re: Processo seletivo', body))).toBeNull();
+  });
+
+  it('"De:" comum no corpo não corta o email nem o prazo', () => {
+    expect(
+      actionRequired(
+        mail(
+          'Agende sua entrevista',
+          'Horários\nDe: segunda a sexta, das 9h às 18h.\nAgende até 25/11/2026.',
+        ),
+      )?.deadline?.text,
+    ).toBe('até 25/11/2026');
+  });
+
   it('não confunde menção futura a teste com convite', () => {
     expect(
       actionRequired(

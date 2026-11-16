@@ -93,6 +93,22 @@ describe('prazo citado no email', () => {
     ).toMatchObject({ state: 'vencido', dueAt: '2026-11-11T12:00:00.000Z' });
   });
 
+  it.each([
+    'Nossa plataforma fica disponível 24 horas por dia.',
+    'Suporte disponível 24h por dia.',
+    'Atendimento available 24 hours a day.',
+    'O sistema fica disponível 7 dias por semana.',
+  ])('horário de atendimento não é prazo: %s', (text) => {
+    expect(findDeadline(text)).toBeNull();
+  });
+
+  it('disponível com duração continua sendo prazo', () => {
+    expect(resolve('O teste fica disponível por 48 horas.')).toMatchObject({
+      text: 'disponível por 48 horas',
+      state: 'proximo',
+    });
+  });
+
   it('recebimento inválido não vira data', () => {
     expect(resolve('expira em 3 dias', new Date('invalid'))).toMatchObject({
       state: 'desconhecido',
