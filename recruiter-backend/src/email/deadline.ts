@@ -93,9 +93,13 @@ const WRITTEN_EN = new RegExp(
  * Relativo: "expira em 48 horas", "valid for 3 days", "nas próximas 72h".
  * "Dias úteis" fica de fora da conta: depende de feriado e de calendário da
  * empresa, e qualquer data calculada seria chute.
+ *
+ * "Disponível" e "válido" só contam com duração ("por 48 horas"), e nunca
+ * seguidos de "por dia": "plataforma disponível 24 horas por dia" é horário
+ * de atendimento, não prazo, e virava um aviso vencido no dia seguinte.
  */
 const RELATIVE =
-  /\b(?:(?:expira(?:ra)?|expires?|valid[oa]|valid|vence|disponivel|available)(?: (?:em|in|por|for|durante))?(?: (?:as proximas|the next))?|nas proximas|within|in the next|dentro de|no prazo de) (\d{1,3}) ?(horas?|hours?|h|dias?|days?)\b( uteis| business)?/;
+  /\b(?:(?:expira(?:ra)?|expires?|vence)(?: (?:em|in))?|(?:valid[oa]|valid|disponivel|available) (?:por|for|durante)|nas proximas|within|in the next|dentro de|no prazo de)(?: (?:as proximas|the next))? (\d{1,3}) ?(horas?|hours?|h|dias?|days?)\b(?! (?:por|a|per|ao) (?:dia|day))( uteis| business)?/;
 
 export function findDeadline(original: string): DeadlineMention | null {
   const { text, slice } = fold(original);
