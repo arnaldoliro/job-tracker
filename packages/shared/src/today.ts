@@ -76,12 +76,15 @@ export const emailActionSchema = z.object({
   gmailUrl: z.url().nullable(),
 });
 export type EmailAction = z.infer<typeof emailActionSchema>;
-/** Busca manual complementar: não amplia o acesso do IMAP. */
-export const RECRUITING_RESCUE_QUERY =
-  'newer_than:90d {from:noreplyhiring@ciandt.com from:fcinterview.fcamara.com.br from:micro1.ai from:mailer.digai.ai}';
-
 export const todaySchema = z.object({
   emailActions: z.array(emailActionSchema).default([]),
+  /**
+   * Busca do Gmail pelos remetentes de recrutamento do .env
+   * (`RECRUITING_RESCUE_SENDERS`). Nula quando a lista está vazia. Vem da API,
+   * e não de uma constante aqui, porque a lista é da pessoa e não pode ir
+   * para o repositório.
+   */
+  rescueQuery: z.string().nullable().default(null),
   followUps: z.array(dueFollowUpSchema),
   /** Sugestões de status lidas dos emails, esperando o seu clique. */
   pendingSuggestions: z.number().int(),

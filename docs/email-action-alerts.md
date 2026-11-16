@@ -6,14 +6,16 @@ O prazo exibido é texto extraído do email, não confirmação de que o portal 
 
 ## Recuperar mensagens fora do filtro
 
-No Gmail, acrescente ao filtro de recrutamento, além dos remetentes já configurados:
+Liste no `.env` do backend os remetentes de recrutamento que podem estar fora do rótulo, separados por vírgula. Vale endereço ou domínio. A lista fica só na sua máquina: ela diz com quais empresas você está em processo, então não vai para o repositório.
 
 ```text
-{from:noreplyhiring@ciandt.com from:fcinterview.fcamara.com.br from:micro1.ai from:mailer.digai.ai}
+RECRUITING_RESCUE_SENDERS=vagas@empresa-um.example,empresa-dois.example
 ```
+
+Com a lista preenchida, Hoje mostra um link que abre essa busca no Gmail. Sem ela, o link não aparece. Inclua os mesmos remetentes no filtro de recrutamento do Gmail.
 
 Aplique o mesmo rótulo configurado em IMAP_MAILBOX e marque a opção de aplicar às conversas existentes. Em Emails, use **Resgatar últimos 90 dias**. O botão é necessário porque a sincronização habitual usa a data do último email e pode não recuperar mensagens antigas recém-rotuladas. A sincronização mantém o comportamento existente de classificação por IA para emails vinculados e verificados quando há chave configurada.
 
 A busca complementar em Hoje abre o Gmail e não muda filtros. Confira a conta aberta no navegador. O aplicativo não consulta automaticamente a caixa de entrada inteira e não verifica os portais de entrevistas.
 
-Depois de atualizar o código: execute `npm run build:shared` e reinicie backend e frontend. Não há migration nova.
+Depois de atualizar o código ou o `.env`: execute `npm run build:shared` e reinicie backend e frontend. Não há migration nova.

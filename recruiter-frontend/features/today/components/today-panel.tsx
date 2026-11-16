@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   APPLICATION_STATUSES,
-  RECRUITING_RESCUE_QUERY,
   FOLLOW_UP_DAYS,
   FOLLOW_UP_SNOOZE_DAYS,
 } from "@recruit/shared";
@@ -42,24 +41,28 @@ export function TodayPanel({ today }: { today: Today }) {
         </p>
       </div>
 
-      <Section
-        title="Confira também os emails fora do filtro"
-        hint="O app só lê o rótulo configurado. Convites de outras plataformas podem ficar de fora."
-      >
-        <a
-          href={`https://mail.google.com/mail/#search/${encodeURIComponent(RECRUITING_RESCUE_QUERY)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm underline"
+      {/* Só com remetentes no .env do backend: a lista é da pessoa e não
+          fica no código, e sem ela não há o que buscar. */}
+      {today.rescueQuery && (
+        <Section
+          title="Confira também os emails fora do filtro"
+          hint="O app só lê o rótulo configurado. Convites de outras plataformas podem ficar de fora."
         >
-          Buscar mensagens de CI&amp;T, FCamara, micro1 e Digaí no Gmail ↗
-        </a>
-        <p className="text-xs text-zinc-400">
-          Confira a conta aberta no Gmail. Inclua os remetentes de recrutamento
-          no filtro do seu rótulo e aplique às conversas existentes; depois
-          sincronize os últimos 90 dias em Emails.
-        </p>
-      </Section>
+          <a
+            href={`https://mail.google.com/mail/#search/${encodeURIComponent(today.rescueQuery)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm underline"
+          >
+            Buscar no Gmail os remetentes de recrutamento configurados ↗
+          </a>
+          <p className="text-xs text-zinc-400">
+            Confira a conta aberta no Gmail. Inclua esses remetentes no filtro
+            do seu rótulo e aplique às conversas existentes; depois sincronize
+            os últimos 90 dias em Emails.
+          </p>
+        </Section>
+      )}
       {today.emailActions.length > 0 && (
         <Section
           title={`Emails que podem exigir ação (${today.emailActions.length})`}

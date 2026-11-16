@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   APPLICATION_STATUSES,
   type ApplicationStatus,
@@ -6,7 +7,9 @@ import {
   type Today,
 } from '@recruit/shared';
 import { active } from '../application/active';
+import type { Env } from '../config/env';
 import { EmailService } from '../email/email.service';
+import { rescueQuery } from '../email/rescue-query';
 import { PrismaService } from '../prisma/prisma.service';
 import { daysSince, followUpDueAt } from '../application/follow-up';
 
@@ -19,6 +22,7 @@ export class TodayService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emails: EmailService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async today(profileId: string, now: Date = new Date()): Promise<Today> {
@@ -96,6 +100,9 @@ export class TodayService {
 
     return {
       emailActions,
+      rescueQuery: rescueQuery(
+        this.config.get('RECRUITING_RESCUE_SENDERS', { infer: true }),
+      ),
       followUps,
       pendingSuggestions: suggestions.length,
       savedNotApplied: saved.map((row) => ({
