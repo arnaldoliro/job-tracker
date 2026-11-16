@@ -19,3 +19,5 @@ Aplique o mesmo rótulo configurado em IMAP_MAILBOX e marque a opção de aplica
 A busca complementar em Hoje abre o Gmail e não muda filtros. Confira a conta aberta no navegador. O aplicativo não consulta automaticamente a caixa de entrada inteira e não verifica os portais de entrevistas.
 
 Depois de atualizar o código ou o `.env`: execute `npm run build:shared` e reinicie backend e frontend. Não há migration nova.
+
+A tela Hoje mostra o estado da leitura de emails: última sincronização bem-sucedida, rodada em andamento, falha ou rodada parcial, e o botão "Sincronizar agora". Com os dados desatualizados (mais de 24 horas ou última rodada com falha), a lista vazia não é apresentada como "sem pendências". Esse estado fica na memória da API e recomeça a cada reinício. Não há sincronização periódica.

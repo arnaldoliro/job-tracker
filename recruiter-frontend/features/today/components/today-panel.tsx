@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   APPLICATION_STATUSES,
   FOLLOW_UP_DAYS,
@@ -11,12 +12,14 @@ import type {
   ApplicationStatus,
   EmailAction,
   EmailDeadline,
+  EmailSyncState,
   DueFollowUp,
   FollowUpAction,
   Today,
 } from "@recruit/shared";
 import {
   dismissEmailAction,
+  syncEmailsAction,
   undismissEmailAction,
 } from "@/features/emails/actions";
 import { StatusBadge } from "@/features/applications/components/status-badge";
@@ -42,12 +45,14 @@ export function TodayPanel({ today }: { today: Today }) {
         </p>
       </div>
 
+      <SyncStatus sync={today.emailSync} />
+
       {/* Só com remetentes no .env do backend: a lista é da pessoa e não
           fica no código, e sem ela não há o que buscar. */}
       {today.rescueQuery && (
         <Section
           title="Confira também os emails fora do filtro"
-          hint="O app só lê o rótulo configurado. Convites de outras plataformas podem ficar de fora."
+          hint={`O app só lê o rótulo ${today.emailSync.mailbox ? `"${today.emailSync.mailbox}"` : "configurado"}, e o resgate de 90 dias também. Convites de outras plataformas ficam de fora até o filtro do Gmail colocá-los no rótulo.`}
         >
           <a
             href={`https://mail.google.com/mail/#search/${encodeURIComponent(today.rescueQuery)}`}
@@ -78,7 +83,7 @@ export function TodayPanel({ today }: { today: Today }) {
       )}
       {nothing && (
         <p className="cine-glass rounded-2xl px-6 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          Nenhuma pendência identificada nos dados sincronizados. Que tal{" "}
+          {emptyMessage(today.emailSync)} Que tal{" "}
           <Link
             href="/vagas"
             className="font-medium underline underline-offset-4"
@@ -357,6 +362,138 @@ function EmailActionItem({ item }: { item: EmailAction }) {
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * "Nada a fazer" só vale sobre emails lidos. Sem sincronização recente, a
+ * lista vazia pode ser só falta de leitura, e a tela precisa dizer qual dos
+ * dois é.
+ */
+function emptyMessage(sync: EmailSyncState): string {
+  if (!sync.configured) {
+    return "Nenhuma pendência nos dados registrados. A leitura de emails não está configurada, então convites por email não aparecem aqui.";
+  }
+
+  if (sync.freshness === "em-dia") {
+    return "Nenhuma pendência identificada: os emails estão sincronizados.";
+  }
+
+  return "Nenhuma pendência nos dados que o app tem, mas os emails não estão em dia: sincronize antes de concluir que não há nada.";
+}
+
+function time(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    timeZone: SP,
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+/**
+ * De quando são os dados de email desta tela, e o botão para trazê-los.
+ *
+ * Sincronizar é sempre um clique: cada rodada pode chamar o modelo, e por
+ * isso não existe sincronização periódica (ver `email-boot-sync.ts`). Durante
+ * uma rodada, "Atualizar" só relê esta tela, sem chamar nada pago.
+ */
+function SyncStatus({ sync }: { sync: EmailSyncState }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  if (!sync.configured) {
+    return (
+      <Section
+        title="Emails não configurados"
+        hint="Defina IMAP_HOST, IMAP_USER e IMAP_PASSWORD no .env do backend para Hoje mostrar convites e pendências vindos por email."
+      >
+        {null}
+      </Section>
+    );
+  }
+
+  const syncNow = () =>
+    startTransition(async () => {
+      setError(null);
+      const result = await syncEmailsAction();
+
+      if (result.status === "error") setError(result.message);
+      router.refresh();
+    });
+
+  const last = sync.lastAttempt;
+  const tone =
+    sync.runningSince === null &&
+    (sync.freshness !== "em-dia" || last?.outcome === "parcial")
+      ? "border border-amber-400/40"
+      : "";
+
+  return (
+    <section
+      className={`cine-glass flex flex-col gap-2 rounded-2xl p-5 text-sm ${tone}`}
+      aria-live="polite"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-sm font-semibold">Emails</h2>
+          <p>
+            {sync.runningSince
+              ? `Sincronização em andamento desde ${time(sync.runningSince)}.`
+              : sync.lastSuccessAt
+                ? `Última sincronização bem-sucedida: ${time(sync.lastSuccessAt)}.`
+                : "Sem sincronização bem-sucedida desde que a API iniciou."}
+            {!sync.runningSince &&
+              sync.freshness === "desatualizado" &&
+              " Os dados podem estar desatualizados."}
+          </p>
+        </div>
+        {sync.runningSince ? (
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="cursor-pointer rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium transition hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Atualizar
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={syncNow}
+            className="cursor-pointer rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          >
+            {pending ? "Sincronizando…" : "Sincronizar agora"}
+          </button>
+        )}
+      </div>
+
+      {!sync.runningSince && last?.outcome === "falhou" && (
+        <p role="alert" className="text-red-600 dark:text-red-400">
+          A última tentativa falhou em {time(last.finishedAt)}
+          {last.message ? `: ${last.message}` : "."}
+        </p>
+      )}
+      {!sync.runningSince && last?.outcome === "parcial" && (
+        <p className="text-amber-700 dark:text-amber-300">
+          A última rodada ({time(last.finishedAt)}) foi parcial: {last.message}{" "}
+          A próxima sincronização tenta de novo.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        O app lê só o rótulo{" "}
+        {sync.mailbox ? <q>{sync.mailbox}</q> : "configurado"} do Gmail; o
+        resgate de 90 dias, em Emails, relê esse mesmo rótulo e não busca fora
+        dele. Não há sincronização periódica: só esta, a de Emails e, se
+        ligada, a que roda quando a API inicia.
+      </p>
+    </section>
   );
 }
 

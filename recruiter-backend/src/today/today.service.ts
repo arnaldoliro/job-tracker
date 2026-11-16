@@ -99,6 +99,7 @@ export class TodayService {
     followUps.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
 
     return {
+      emailSync: this.emails.syncState(now),
       emailActions,
       rescueQuery: rescueQuery(
         this.config.get('RECRUITING_RESCUE_SENDERS', { infer: true }),
